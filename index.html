@@ -197,7 +197,9 @@
 // Paste a Drive "view" image URL for your DuitNow QR here, e.g.
 // https://drive.google.com/uc?export=view&id=YOUR_FILE_ID
 // Leave blank to show a text fallback instead.
-const QR_IMAGE_URL = "https://drive.google.com/uc?export=view&id=1GdT8qTnin7xOXujWmNeXs9mSV5u__kku";
+// Hosted directly in this same GitHub repo, next to index.html — avoids the
+// Google Drive hotlink rate-limiting that was breaking this before.
+const QR_IMAGE_URL = "Gaia%20health%20Maybank%20QR.png";
 
 // The deployed Apps Script Web App URL — used as a plain background data API
 // (not for hosting the page) whenever this file is opened from anywhere
@@ -228,7 +230,7 @@ let currentOrder = {whatsapp:'', slip:null, slipMime:'image/jpeg'};
 (function renderQR(){
   const wrap = document.getElementById('qrWrap');
   if (QR_IMAGE_URL) {
-    wrap.innerHTML = `<img src="${QR_IMAGE_URL}" alt="Scan to pay via DuitNow" onerror="this.parentElement.innerHTML='<div class=\\'qr-fallback\\'>QR image could not load (Google Drive link may be rate-limited) — use the printed counter QR instead. <a href=\\'https://drive.google.com/file/d/1GdT8qTnin7xOXujWmNeXs9mSV5u__kku/view\\' target=\\'_blank\\'>Open QR directly</a></div>'">`;
+    wrap.innerHTML = `<img src="${QR_IMAGE_URL}" alt="Scan to pay via DuitNow" onerror="this.parentElement.innerHTML='<div class=\\'qr-fallback\\'>QR image could not load — use the printed counter QR instead.</div>'">`;
   } else {
     wrap.innerHTML = `<div class="qr-fallback">DuitNow QR image not set up yet — customer pays via the printed counter QR. (To show it here, paste a Drive image link into QR_IMAGE_URL at the top of the script.)</div>`;
   }
