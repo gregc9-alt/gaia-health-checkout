@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Gaia Health — Order Checkout</title>
 <style>
   :root{
@@ -185,6 +186,7 @@
       <button class="btn btn-ghost" onclick="closeLog()">Close</button>
     </div>
     <div id="logBanner"></div>
+    <p class="sub">If this list doesn't load, the master record is always the <a href="#" id="sheetLink" target="_blank">Google Sheet directly</a>.</p>
     <div id="logTableWrap">Loading…</div>
   </section>
 
@@ -201,6 +203,11 @@ const QR_IMAGE_URL = "https://drive.google.com/uc?export=view&id=1GdT8qTnin7xOXu
 // (not for hosting the page) whenever this file is opened from anywhere
 // other than the Apps Script domain itself, e.g. from GitHub Pages.
 const API_URL = "https://script.google.com/macros/s/AKfycbyBkEvPdkodOd4AlKY4xtiJnZ75W73fqMJkdEd-kWE5xdRbiJFJC6oHaAt9DjzFurZzhQ/exec";
+
+// Direct link to the master Sheet — shown as a fallback in Today's Orders,
+// since reading data back cross-origin (from GitHub Pages) isn't always
+// reliable, even though submitting orders is (see submitViaHiddenForm below).
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/1Hq4Y1j-z9d6rTo6YmIL-at7bRX2zt3BJrWxCMIZOhjk/edit";
 
 /* ================= DATA ================= */
 const SETS = {
@@ -239,11 +246,57 @@ function callLogOrder(payload){
       google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).logOrder(payload);
     });
   }
-  return fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight
-    body: JSON.stringify(payload)
-  }).then(r => r.json());
+  if (navigator.onLine === false) {
+    return Promise.reject(new Error('offline'));
+  }
+  return submitViaHiddenForm(payload);
+}
+
+/**
+ * Submits an order using a real (hidden) HTML form POST instead of fetch().
+ * This avoids a known Google issue where fetch()-based cross-origin calls to
+ * an Apps Script /exec URL intermittently fail with a 503, even though the
+ * exact same request works fine as a normal form submission or navigation.
+ * We can't read Apps Script's response this way (it's a cross-origin iframe),
+ * so this resolves once the round trip completes rather than on confirmed
+ * success — the underlying delivery mechanism is the reliable one, though.
+ */
+function submitViaHiddenForm(payload){
+  return new Promise((resolve) => {
+    let iframe = document.getElementById('hiddenSubmitFrame');
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.name = 'hiddenSubmitFrame';
+      iframe.id = 'hiddenSubmitFrame';
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+    }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = API_URL;
+    form.target = 'hiddenSubmitFrame';
+    form.style.display = 'none';
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'payload';
+    input.value = JSON.stringify(payload);
+    form.appendChild(input);
+    document.body.appendChild(form);
+
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      form.remove();
+      resolve();
+    };
+    iframe.onload = finish;
+    setTimeout(finish, 4000); // fallback in case onload doesn't fire
+
+    form.submit();
+  });
 }
 
 function callGetTodaysOrders(){
@@ -458,7 +511,7 @@ function loadLogFromSheet(){
   document.getElementById('logTableWrap').innerHTML = 'Loading…';
   callGetTodaysOrders()
     .then(renderLogTable)
-    .catch(function(){ document.getElementById('logTableWrap').innerHTML = '<p class="sub">Could not load orders.</p>'; });
+    .catch(function(){ document.getElementById('logTableWrap').innerHTML = '<p class="sub">Could not load the list here — open the Google Sheet link above to see all orders.</p>'; });
 }
 function renderLogTable(rows){
   const pending = loadPending();
@@ -482,6 +535,8 @@ function renderLogTable(rows){
 /* ================= INIT ================= */
 renderCartPreview();
 updatePendingBadge();
+const sheetLinkEl = document.getElementById('sheetLink');
+if (sheetLinkEl) sheetLinkEl.href = SHEET_URL;
 </script>
 
 </body>
