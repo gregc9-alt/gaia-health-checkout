@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Gaia Health — Order Checkout</title>
+<style>
+  :root{
+    --maroon:#5c1f3d; --maroon-dark:#431730; --cream:#f8f1e4;
+    --gold:#c9a227; --green:#4a7c3f; --ink:#2b1a22; --line:#e4d7c2; --danger:#b23b3b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--cream);color:var(--ink);display:flex;flex-direction:column;min-height:100vh;}
+  header{background:var(--maroon);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20;box-shadow:0 2px 6px rgba(0,0,0,.15);}
+  header .brand{font-weight:700;font-size:1.05rem;}
+  header button.link{background:none;border:1px solid rgba(255,255,255,.5);color:#fff;padding:6px 12px;border-radius:8px;font-size:.8rem;}
+  main{flex:1;padding:16px;max-width:640px;margin:0 auto;width:100%;padding-bottom:100px;}
+  .step-label{font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--maroon);font-weight:700;margin:4px 0 10px;}
+  h2{margin:0 0 6px;font-size:1.3rem;color:var(--maroon-dark);}
+  p.sub{margin:0 0 16px;color:#6b5a63;font-size:.92rem;}
+  .card-grid{display:grid;gap:12px;}
+  .set-card{background:#fff;border:2px solid var(--line);border-radius:14px;padding:16px;text-align:left;cursor:pointer;}
+  .set-card:active{transform:scale(.98);}
+  .set-card .name{font-weight:700;font-size:1.05rem;color:var(--maroon);}
+  .set-card .price{font-size:1.6rem;font-weight:800;color:var(--maroon-dark);margin:4px 0;}
+  .set-card .desc{font-size:.85rem;color:#6b5a63;}
+  .set-card .free{display:inline-block;background:#f1e6c8;color:#8a6d1a;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:6px;margin-top:6px;margin-right:4px;}
+  .flavor-slot{margin-bottom:18px;}
+  .flavor-slot .slot-title{font-weight:700;margin-bottom:8px;font-size:.95rem;}
+  .flavor-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .flavor-btn{padding:14px 8px;border-radius:10px;border:2px solid var(--line);background:#fff;font-size:.95rem;font-weight:600;color:var(--ink);text-align:center;}
+  .flavor-btn.selected{background:var(--maroon);color:#fff;border-color:var(--maroon);}
+  .btn{display:block;width:100%;padding:16px;border:none;border-radius:12px;font-size:1.05rem;font-weight:700;cursor:pointer;margin-top:10px;}
+  .btn-primary{background:var(--maroon);color:#fff;}
+  .btn-primary:disabled{background:#c9b9c1;color:#fff;}
+  .btn-secondary{background:#fff;color:var(--maroon);border:2px solid var(--maroon);}
+  .btn-ghost{background:none;color:#8a7a80;text-decoration:underline;font-weight:600;}
+  .cart-item{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;}
+  .cart-item .meta{font-size:.85rem;color:#6b5a63;margin-top:2px;}
+  .cart-item .rm{font-weight:700;color:var(--maroon-dark);white-space:nowrap;margin-left:10px;}
+  .cart-item .rm-remove{color:var(--danger);font-size:.78rem;display:block;margin-top:4px;background:none;border:none;text-decoration:underline;padding:0;}
+  .total-bar{background:#fff;border:2px solid var(--maroon);border-radius:12px;padding:16px;display:flex;justify-content:space-between;align-items:center;margin:14px 0;}
+  .total-bar .label{font-weight:700;}
+  .total-bar .amt{font-size:1.8rem;font-weight:800;color:var(--maroon-dark);}
+  input[type=tel],input[type=text]{width:100%;padding:16px;font-size:1.2rem;border:2px solid var(--line);border-radius:12px;margin-bottom:8px;}
+  .big-amount{text-align:center;background:var(--maroon);color:#fff;border-radius:16px;padding:22px;margin:16px 0;}
+  .big-amount .rm{font-size:3rem;font-weight:800;letter-spacing:.5px;}
+  .big-amount .note{font-size:.85rem;opacity:.9;margin-top:6px;}
+  .qr-wrap{text-align:center;margin:14px 0;}
+  .qr-wrap img{max-width:220px;border-radius:10px;border:2px solid var(--line);}
+  .qr-fallback{font-size:.85rem;color:#6b5a63;background:#fff;border:1px dashed var(--line);border-radius:10px;padding:14px;}
+  .confirm-row{display:flex;align-items:center;gap:10px;background:#fff8ea;border:1px solid var(--gold);border-radius:10px;padding:14px;margin-top:10px;}
+  .confirm-row input{width:22px;height:22px;}
+  .confirm-row label{font-size:.92rem;font-weight:600;}
+  .slip-box{border:2px dashed var(--line);border-radius:14px;padding:20px;text-align:center;background:#fff;}
+  .slip-box img{max-width:100%;max-height:280px;border-radius:8px;margin-top:10px;}
+  .slip-box input[type=file]{display:none;}
+  .slip-label{display:inline-block;background:var(--maroon);color:#fff;padding:14px 22px;border-radius:10px;font-weight:700;margin-top:8px;}
+  .success{text-align:center;padding:30px 10px;}
+  .success .check{width:70px;height:70px;border-radius:50%;background:var(--green);color:#fff;font-size:2.2rem;line-height:70px;margin:0 auto 14px;}
+  .success.offline .check{background:var(--gold);}
+  .success .oid{font-family:monospace;font-size:1.1rem;background:#fff;padding:8px 14px;border-radius:8px;display:inline-block;margin-top:8px;border:1px solid var(--line);}
+  table{width:100%;border-collapse:collapse;font-size:.8rem;background:#fff;}
+  th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;}
+  th{background:var(--cream);}
+  .log-actions{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+  .log-actions .btn{margin-top:0;width:auto;flex:1;min-width:120px;}
+  .pill{display:inline-block;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:6px;}
+  .pill-pending{background:#fdecc8;color:#8a6d1a;}
+  .pill-synced{background:#dcefda;color:#2e6b28;}
+  .stepper{display:flex;gap:4px;margin-bottom:14px;}
+  .hidden{display:none !important;}
+  .banner{background:#fdecc8;color:#6b5417;border:1px solid var(--gold);border-radius:10px;padding:10px 14px;font-size:.85rem;margin-bottom:12px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">🌿 Gaia Health Checkout</div>
+  <button class="link" id="logBtn">Today's Orders</button>
+</header>
+
+<main>
+
+  <section id="step1">
+    <div class="step-label">Step 1 of 5 — Add Item</div>
+    <h2>Select a bundle or item</h2>
+    <p class="sub">Tap an item to choose flavours. Add as many as needed for this order.</p>
+    <div class="card-grid">
+      <div class="set-card" onclick="startFlavorSelect('A')">
+        <div class="name">Set A — 14-Day Starter</div>
+        <div class="price">RM40</div>
+        <div class="desc">2 boxes · 16 sachets total · RM2.50/sachet</div>
+      </div>
+      <div class="set-card" onclick="startFlavorSelect('B')">
+        <div class="name">Set B — 60-Day Support Pack</div>
+        <div class="price">RM159</div>
+        <div class="desc">4 boxes + 1 Ecobag · 67 sachets total · RM2.37/sachet</div>
+        <span class="free">FREE Trial Pack (5 flavours)</span>
+      </div>
+      <div class="set-card" onclick="startFlavorSelect('C')">
+        <div class="name">Set C — 90-Day Gut Reset (Best Value)</div>
+        <div class="price">RM240</div>
+        <div class="desc">3 Ecobags · 103 sachets total · RM2.33/sachet</div>
+        <span class="free">FREE Avocado Box</span>
+        <span class="free">FREE Trial Pack (5 flavours)</span>
+      </div>
+      <div class="set-card" onclick="startFlavorSelect('ECOBAG_SINGLE')">
+        <div class="name">Ecobag (Single)</div>
+        <div class="price">RM80</div>
+        <div class="desc">1 Ecobag · choose 1 flavour</div>
+      </div>
+    </div>
+    <div id="cartPreview" style="margin-top:20px;"></div>
+    <button class="btn btn-primary" id="toCheckoutBtn" onclick="goToStep(3)" disabled>Proceed to Checkout &rarr;</button>
+  </section>
+
+  <section id="step2" class="hidden">
+    <div class="step-label">Step 1 of 5 — Choose Flavours</div>
+    <h2 id="flavorSetName"></h2>
+    <p class="sub">Tap a flavour for each slot.</p>
+    <div id="flavorSlots"></div>
+    <button class="btn btn-primary" id="addToCartBtn" onclick="confirmAddToCart()" disabled>Add to Order</button>
+    <button class="btn btn-ghost" onclick="goToStep(1)">Cancel</button>
+  </section>
+
+  <section id="step3" class="hidden">
+    <div class="step-label">Step 2 of 5 — Order Summary</div>
+    <h2>Confirm order</h2>
+    <div id="cartSummary"></div>
+    <div class="total-bar"><div class="label">Total</div><div class="amt" id="cartTotal">RM0</div></div>
+    <button class="btn btn-secondary" onclick="goToStep(1)">+ Add Another Item</button>
+    <button class="btn btn-primary" onclick="goToStep(4)">Continue &rarr;</button>
+  </section>
+
+  <section id="step4" class="hidden">
+    <div class="step-label">Step 3 of 5 — Customer Contact</div>
+    <h2>WhatsApp number</h2>
+    <p class="sub">Used for invoice + order confirmation. Format: 01XXXXXXXX</p>
+    <input type="tel" id="whatsappInput" placeholder="e.g. 0123456789" inputmode="numeric">
+    <button class="btn btn-primary" id="toPaymentBtn" onclick="goToStep(5)" disabled>Continue &rarr;</button>
+  </section>
+
+  <section id="step5" class="hidden">
+    <div class="step-label">Step 4 of 5 — Payment</div>
+    <h2>Pay this exact amount</h2>
+    <div class="big-amount">
+      <div class="rm" id="payAmount">RM0</div>
+      <div class="note">This QR is static — you must type this amount manually in your banking app before paying.</div>
+    </div>
+    <div class="qr-wrap" id="qrWrap"></div>
+    <div class="confirm-row">
+      <input type="checkbox" id="paymentConfirmCheck" onchange="toggleSlipBtn()">
+      <label for="paymentConfirmCheck">I've paid this exact amount via the QR above</label>
+    </div>
+    <button class="btn btn-primary" id="toSlipBtn" onclick="goToStep(6)" disabled>Continue &rarr;</button>
+  </section>
+
+  <section id="step6" class="hidden">
+    <div class="step-label">Step 5 of 5 — Payment Slip</div>
+    <h2>Attach payment slip</h2>
+    <div class="slip-box">
+      <div id="slipPreviewWrap"></div>
+      <label class="slip-label" for="slipFile">📷 Take Photo / Choose from Gallery</label>
+      <input type="file" id="slipFile" accept="image/*" onchange="handleSlip(event)">
+    </div>
+    <button class="btn btn-primary" id="submitOrderBtn" onclick="submitOrder()" disabled>Submit Order</button>
+  </section>
+
+  <section id="step7" class="hidden">
+    <div class="success" id="successBox">
+      <div class="check" id="successIcon">✓</div>
+      <h2 id="successTitle">Order saved</h2>
+      <p class="sub" id="successSub">Order ID</p>
+      <div class="oid" id="successOrderId"></div>
+      <button class="btn btn-primary" onclick="resetOrder()">New Order</button>
+    </div>
+  </section>
+
+  <section id="logView" class="hidden">
+    <div class="step-label">Staff View</div>
+    <h2>Today's Orders</h2>
+    <div class="log-actions">
+      <button class="btn btn-secondary" onclick="loadLogFromSheet()">Refresh</button>
+      <button class="btn btn-secondary" onclick="retrySync()">Retry Sync (<span id="pendingCount">0</span>)</button>
+      <button class="btn btn-ghost" onclick="closeLog()">Close</button>
+    </div>
+    <div id="logBanner"></div>
+    <div id="logTableWrap">Loading…</div>
+  </section>
+
+</main>
+
+<script>
+/* ================= CONFIG ================= */
+// Paste a Drive "view" image URL for your DuitNow QR here, e.g.
+// https://drive.google.com/uc?export=view&id=YOUR_FILE_ID
+// Leave blank to show a text fallback instead.
+const QR_IMAGE_URL = "https://drive.google.com/uc?export=view&id=1GdT8qTnin7xOXujWmNeXs9mSV5u__kku";
+
+// The deployed Apps Script Web App URL — used as a plain background data API
+// (not for hosting the page) whenever this file is opened from anywhere
+// other than the Apps Script domain itself, e.g. from GitHub Pages.
+const API_URL = "https://script.google.com/macros/s/AKfycbyBkEvPdkodOd4AlKY4xtiJnZ75W73fqMJkdEd-kWE5xdRbiJFJC6oHaAt9DjzFurZzhQ/exec";
+
+/* ================= DATA ================= */
+const SETS = {
+  A: {name:'Set A — 14-Day Starter', price:40, boxSlots:2, ecobagSlots:0, free:[]},
+  B: {name:'Set B — 60-Day Support Pack', price:159, boxSlots:4, ecobagSlots:1, free:['Trial Pack (5 flavours)']},
+  C: {name:'Set C — 90-Day Gut Reset', price:240, boxSlots:0, ecobagSlots:3, free:['Avocado Box','Trial Pack (5 flavours)']},
+  ECOBAG_SINGLE: {name:'Ecobag (Single)', price:80, boxSlots:0, ecobagSlots:1, free:[]}
+};
+const BOX_FLAVORS = ['Avocado','Original','Chocolate','Oats'];
+const ECOBAG_FLAVORS = ['Purple Sweet Potato','Avocado','Chocolate','Original','Oats'];
+
+let cart = [];
+let pendingSet = null;
+let pendingSlots = [];
+let currentOrder = {whatsapp:'', slip:null, slipMime:'image/jpeg'};
+
+/* ================= QR RENDER ================= */
+(function renderQR(){
+  const wrap = document.getElementById('qrWrap');
+  if (QR_IMAGE_URL) {
+    wrap.innerHTML = `<img src="${QR_IMAGE_URL}" alt="Scan to pay via DuitNow" onerror="this.parentElement.innerHTML='<div class=\\'qr-fallback\\'>QR image could not load (Google Drive link may be rate-limited) — use the printed counter QR instead. <a href=\\'https://drive.google.com/file/d/1GdT8qTnin7xOXujWmNeXs9mSV5u__kku/view\\' target=\\'_blank\\'>Open QR directly</a></div>'">`;
+  } else {
+    wrap.innerHTML = `<div class="qr-fallback">DuitNow QR image not set up yet — customer pays via the printed counter QR. (To show it here, paste a Drive image link into QR_IMAGE_URL at the top of the script.)</div>`;
+  }
+})();
+
+/* ================= BACKEND CALLS =================
+   Works two ways transparently:
+   - Hosted inside Apps Script (doGet serves this file): uses google.script.run
+   - Hosted anywhere else (e.g. GitHub Pages): falls back to fetch() against
+     API_URL, which is the same Apps Script project used purely as a JSON API.
+*/
+function callLogOrder(payload){
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    return new Promise((resolve, reject)=>{
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).logOrder(payload);
+    });
+  }
+  return fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight
+    body: JSON.stringify(payload)
+  }).then(r => r.json());
+}
+
+function callGetTodaysOrders(){
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    return new Promise((resolve, reject)=>{
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getTodaysOrders();
+    });
+  }
+  return fetch(API_URL + '?action=getOrders').then(r => r.json());
+}
+
+/* ================= OFFLINE QUEUE ================= */
+function loadPending(){ return JSON.parse(localStorage.getItem('gaia_pending_orders')||'[]'); }
+function savePending(list){ localStorage.setItem('gaia_pending_orders', JSON.stringify(list)); }
+function updatePendingBadge(){
+  document.getElementById('pendingCount').textContent = loadPending().length;
+}
+
+/* ================= NAVIGATION ================= */
+function goToStep(n){
+  ['step1','step2','step3','step4','step5','step6','step7'].forEach((id,i)=>{
+    document.getElementById(id).classList.toggle('hidden', (i+1)!==n);
+  });
+  if(n===3) renderCartSummary();
+  if(n===5) document.getElementById('payAmount').textContent = 'RM'+cartTotalValue().toFixed(2);
+}
+
+/* ================= STEP 1: bundle -> flavour ================= */
+function startFlavorSelect(setKey){
+  pendingSet = setKey;
+  const set = SETS[setKey];
+  pendingSlots = [];
+  for(let i=0;i<set.boxSlots;i++) pendingSlots.push({type:'box', flavor:null});
+  for(let i=0;i<set.ecobagSlots;i++) pendingSlots.push({type:'ecobag', flavor:null});
+
+  document.getElementById('flavorSetName').textContent = set.name + (set.free.length? ' (+ '+set.free.join(', ')+' free)' : '');
+  const wrap = document.getElementById('flavorSlots');
+  wrap.innerHTML = '';
+  pendingSlots.forEach((slot, idx)=>{
+    const flavors = slot.type==='box' ? BOX_FLAVORS : ECOBAG_FLAVORS;
+    const slotNum = slot.type==='box' ? idx+1 : idx+1-set.boxSlots;
+    const div = document.createElement('div');
+    div.className = 'flavor-slot';
+    div.innerHTML = `<div class="slot-title">${slot.type==='box'?'Box':'Ecobag'} ${slotNum} flavour</div>
+      <div class="flavor-btns">${flavors.map(f=>`<button type="button" class="flavor-btn" data-idx="${idx}" data-flavor="${f}" onclick="pickFlavor(${idx},'${f.replace(/'/g,"\\'")}')">${f}</button>`).join('')}</div>`;
+    wrap.appendChild(div);
+  });
+  document.getElementById('addToCartBtn').disabled = true;
+  goToStep(2);
+}
+
+function pickFlavor(idx, flavor){
+  pendingSlots[idx].flavor = flavor;
+  document.querySelectorAll(`.flavor-btn[data-idx="${idx}"]`).forEach(btn=>{
+    btn.classList.toggle('selected', btn.dataset.flavor===flavor);
+  });
+  document.getElementById('addToCartBtn').disabled = !pendingSlots.every(s=>s.flavor);
+}
+
+function confirmAddToCart(){
+  const set = SETS[pendingSet];
+  cart.push({ setKey: pendingSet, name: set.name, price: set.price, slots: pendingSlots.slice(), free: set.free.slice() });
+  renderCartPreview();
+  goToStep(1);
+}
+
+function renderCartPreview(){
+  const wrap = document.getElementById('cartPreview');
+  document.getElementById('toCheckoutBtn').disabled = cart.length===0;
+  if(cart.length===0){ wrap.innerHTML=''; return; }
+  wrap.innerHTML = '<div class="step-label">In this order</div>' + cart.map((item,i)=>`
+    <div class="cart-item">
+      <div>
+        <strong>${item.name}</strong>
+        <div class="meta">${item.slots.map(s=>s.flavor).join(', ')}${item.free.length? ' + '+item.free.join(', '):''}</div>
+        <button class="rm-remove" onclick="removeCartItem(${i})">Remove</button>
+      </div>
+      <div class="rm">RM${item.price}</div>
+    </div>`).join('');
+}
+
+function removeCartItem(i){ cart.splice(i,1); renderCartPreview(); }
+function cartTotalValue(){ return cart.reduce((s,i)=>s+i.price,0); }
+
+function renderCartSummary(){
+  document.getElementById('cartSummary').innerHTML = cart.map(item=>`
+    <div class="cart-item">
+      <div><strong>${item.name}</strong>
+        <div class="meta">${item.slots.map(s=>s.flavor).join(', ')}${item.free.length? ' + '+item.free.join(', '):''}</div>
+      </div>
+      <div class="rm">RM${item.price}</div>
+    </div>`).join('');
+  document.getElementById('cartTotal').textContent = 'RM'+cartTotalValue().toFixed(2);
+}
+
+/* ================= STEP 4 ================= */
+document.getElementById('whatsappInput').addEventListener('input', e=>{
+  document.getElementById('toPaymentBtn').disabled = e.target.value.replace(/\D/g,'').length < 9;
+});
+
+/* ================= STEP 5 ================= */
+function toggleSlipBtn(){
+  document.getElementById('toSlipBtn').disabled = !document.getElementById('paymentConfirmCheck').checked;
+}
+
+/* ================= STEP 6 ================= */
+function handleSlip(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    currentOrder.slip = ev.target.result;
+    currentOrder.slipMime = file.type || 'image/jpeg';
+    document.getElementById('slipPreviewWrap').innerHTML = `<img src="${ev.target.result}">`;
+    document.getElementById('submitOrderBtn').disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+/* ================= SUBMIT ================= */
+function buildOrderPayload(orderId){
+  return {
+    id: orderId,
+    timestamp: new Date().toISOString(),
+    whatsapp: document.getElementById('whatsappInput').value.trim(),
+    items: cart.map(i=>({ name: i.name, flavors: i.slots.map(s=>s.flavor) })),
+    total: cartTotalValue(),
+    slipBase64: currentOrder.slip,
+    source: 'checkout-page'
+  };
+}
+
+function submitOrder(){
+  const orderId = 'GH-' + Date.now().toString(36).toUpperCase();
+  const payload = buildOrderPayload(orderId);
+  document.getElementById('submitOrderBtn').disabled = true;
+  document.getElementById('submitOrderBtn').textContent = 'Submitting…';
+
+  callLogOrder(payload)
+    .then(function(){ showSuccess(orderId, true); })
+    .catch(function(){ queueOffline(payload); showSuccess(orderId, false); });
+}
+
+function queueOffline(payload){
+  const pending = loadPending();
+  pending.push(payload);
+  savePending(pending);
+}
+
+function showSuccess(orderId, synced){
+  document.getElementById('successOrderId').textContent = orderId;
+  const box = document.getElementById('successBox');
+  if(synced){
+    box.classList.remove('offline');
+    document.getElementById('successIcon').textContent = '✓';
+    document.getElementById('successTitle').textContent = 'Order saved to Google Sheet';
+  } else {
+    box.classList.add('offline');
+    document.getElementById('successIcon').textContent = '⚠';
+    document.getElementById('successTitle').textContent = 'Saved offline — will sync when online';
+  }
+  goToStep(7);
+}
+
+function resetOrder(){
+  cart = [];
+  currentOrder = {whatsapp:'', slip:null, slipMime:'image/jpeg'};
+  document.getElementById('whatsappInput').value = '';
+  document.getElementById('paymentConfirmCheck').checked = false;
+  document.getElementById('slipPreviewWrap').innerHTML = '';
+  document.getElementById('submitOrderBtn').disabled = true;
+  document.getElementById('submitOrderBtn').textContent = 'Submit Order';
+  document.getElementById('toPaymentBtn').disabled = true;
+  document.getElementById('toSlipBtn').disabled = true;
+  renderCartPreview();
+  goToStep(1);
+}
+
+/* ================= RETRY SYNC ================= */
+function retrySync(){
+  const pending = loadPending();
+  if(pending.length===0){ document.getElementById('logBanner').innerHTML = '<div class="banner">Nothing to sync.</div>'; return; }
+  document.getElementById('logBanner').innerHTML = '<div class="banner">Syncing '+pending.length+' order(s)…</div>';
+  let remaining = pending.slice();
+  const still = [];
+  function next(){
+    if(remaining.length===0){
+      savePending(still);
+      updatePendingBadge();
+      document.getElementById('logBanner').innerHTML = '<div class="banner">Sync complete. '+still.length+' order(s) still pending.</div>';
+      loadLogFromSheet();
+      return;
+    }
+    const order = remaining.shift();
+    callLogOrder(order).then(function(){ next(); }).catch(function(){ still.push(order); next(); });
+  }
+  next();
+}
+
+/* ================= STAFF LOG VIEW ================= */
+document.getElementById('logBtn').addEventListener('click', ()=>{
+  document.querySelectorAll('main > section').forEach(s=>s.classList.add('hidden'));
+  document.getElementById('logView').classList.remove('hidden');
+  updatePendingBadge();
+  loadLogFromSheet();
+});
+function closeLog(){
+  document.getElementById('logView').classList.add('hidden');
+  goToStep(1);
+}
+function loadLogFromSheet(){
+  document.getElementById('logTableWrap').innerHTML = 'Loading…';
+  callGetTodaysOrders()
+    .then(renderLogTable)
+    .catch(function(){ document.getElementById('logTableWrap').innerHTML = '<p class="sub">Could not load orders.</p>'; });
+}
+function renderLogTable(rows){
+  const pending = loadPending();
+  updatePendingBadge();
+  if((!rows || rows.length===0) && pending.length===0){
+    document.getElementById('logTableWrap').innerHTML = '<p class="sub">No orders yet today.</p>';
+    return;
+  }
+  let html = '<table><tr><th>Order ID</th><th>Time</th><th>WhatsApp</th><th>Items</th><th>Total</th><th>Slip</th><th>Status</th></tr>';
+  (rows||[]).forEach(r=>{
+    html += `<tr><td>${r[0]}</td><td>${new Date(r[1]).toLocaleTimeString()}</td><td>${r[2]}</td><td>${r[3]}</td><td>RM${r[4]}</td><td>${r[5]?`<a href="${r[5]}" target="_blank">view</a>`:'—'}</td><td><span class="pill pill-synced">Synced</span></td></tr>`;
+  });
+  pending.forEach(p=>{
+    const itemsTxt = p.items.map(i=>`${i.name} [${i.flavors.join('/')}]`).join('; ');
+    html += `<tr><td>${p.id}</td><td>${new Date(p.timestamp).toLocaleTimeString()}</td><td>${p.whatsapp}</td><td>${itemsTxt}</td><td>RM${p.total}</td><td>${p.slipBase64?'attached':'—'}</td><td><span class="pill pill-pending">Pending sync</span></td></tr>`;
+  });
+  html += '</table>';
+  document.getElementById('logTableWrap').innerHTML = html;
+}
+
+/* ================= INIT ================= */
+renderCartPreview();
+updatePendingBadge();
+</script>
+
+</body>
+</html>
