@@ -101,8 +101,7 @@
       <div class="set-card" onclick="startFlavorSelect('C')">
         <div class="name">Set C — 90-Day Gut Reset (Best Value)</div>
         <div class="price">RM240</div>
-        <div class="desc">3 Ecobags · 103 sachets total · RM2.33/sachet</div>
-        <span class="free">FREE Avocado Box</span>
+        <div class="desc">3 Ecobags + 1 FREE Box (any flavour) · 103 sachets total · RM2.33/sachet</div>
         <span class="free">FREE Trial Pack (5 flavours)</span>
       </div>
       <div class="set-card" onclick="startFlavorSelect('ECOBAG_SINGLE')">
@@ -135,9 +134,10 @@
 
   <section id="step4" class="hidden">
     <div class="step-label">Step 3 of 5 — Customer Contact</div>
-    <h2>WhatsApp number</h2>
-    <p class="sub">Used for invoice + order confirmation. Format: 01XXXXXXXX</p>
-    <input type="tel" id="whatsappInput" placeholder="e.g. 0123456789" inputmode="numeric">
+    <h2>Customer details</h2>
+    <p class="sub">Name is optional but helps with invoicing. WhatsApp number is required — format: 01XXXXXXXX</p>
+    <input type="text" id="nameInput" placeholder="Customer name (optional)">
+    <input type="tel" id="whatsappInput" placeholder="WhatsApp number, e.g. 0123456789" inputmode="numeric">
     <button class="btn btn-primary" id="toPaymentBtn" onclick="goToStep(5)" disabled>Continue &rarr;</button>
   </section>
 
@@ -215,7 +215,7 @@ const SHEET_URL = "https://docs.google.com/spreadsheets/d/1Hq4Y1j-z9d6rTo6YmIL-a
 const SETS = {
   A: {name:'Set A — 14-Day Starter', price:40, boxSlots:2, ecobagSlots:0, free:[]},
   B: {name:'Set B — 60-Day Support Pack', price:159, boxSlots:4, ecobagSlots:1, free:['Trial Pack (5 flavours)']},
-  C: {name:'Set C — 90-Day Gut Reset', price:240, boxSlots:0, ecobagSlots:3, free:['Avocado Box','Trial Pack (5 flavours)']},
+  C: {name:'Set C — 90-Day Gut Reset', price:240, boxSlots:1, ecobagSlots:3, free:['Trial Pack (5 flavours)']},
   ECOBAG_SINGLE: {name:'Ecobag (Single)', price:80, boxSlots:0, ecobagSlots:1, free:[]}
 };
 const BOX_FLAVORS = ['Avocado','Original','Chocolate','Oats'];
@@ -423,6 +423,7 @@ function buildOrderPayload(orderId){
   return {
     id: orderId,
     timestamp: new Date().toISOString(),
+    name: document.getElementById('nameInput').value.trim(),
     whatsapp: document.getElementById('whatsappInput').value.trim(),
     items: cart.map(i=>({ name: i.name, flavors: i.slots.map(s=>s.flavor) })),
     total: cartTotalValue(),
@@ -466,6 +467,7 @@ function showSuccess(orderId, synced){
 function resetOrder(){
   cart = [];
   currentOrder = {whatsapp:'', slip:null, slipMime:'image/jpeg'};
+  document.getElementById('nameInput').value = '';
   document.getElementById('whatsappInput').value = '';
   document.getElementById('paymentConfirmCheck').checked = false;
   document.getElementById('slipPreviewWrap').innerHTML = '';
@@ -522,13 +524,13 @@ function renderLogTable(rows){
     document.getElementById('logTableWrap').innerHTML = '<p class="sub">No orders yet today.</p>';
     return;
   }
-  let html = '<table><tr><th>Order ID</th><th>Time</th><th>WhatsApp</th><th>Items</th><th>Total</th><th>Slip</th><th>Status</th></tr>';
+  let html = '<table><tr><th>Order ID</th><th>Time</th><th>Name</th><th>WhatsApp</th><th>Items</th><th>Total</th><th>Slip</th><th>Status</th></tr>';
   (rows||[]).forEach(r=>{
-    html += `<tr><td>${r[0]}</td><td>${new Date(r[1]).toLocaleTimeString()}</td><td>${r[2]}</td><td>${r[3]}</td><td>RM${r[4]}</td><td>${r[5]?`<a href="${r[5]}" target="_blank">view</a>`:'—'}</td><td><span class="pill pill-synced">Synced</span></td></tr>`;
+    html += `<tr><td>${r[0]}</td><td>${new Date(r[1]).toLocaleTimeString()}</td><td>${r[2]||'—'}</td><td>${r[3]}</td><td>${r[4]}</td><td>RM${r[5]}</td><td>${r[6]?`<a href="${r[6]}" target="_blank">view</a>`:'—'}</td><td><span class="pill pill-synced">Synced</span></td></tr>`;
   });
   pending.forEach(p=>{
     const itemsTxt = p.items.map(i=>`${i.name} [${i.flavors.join('/')}]`).join('; ');
-    html += `<tr><td>${p.id}</td><td>${new Date(p.timestamp).toLocaleTimeString()}</td><td>${p.whatsapp}</td><td>${itemsTxt}</td><td>RM${p.total}</td><td>${p.slipBase64?'attached':'—'}</td><td><span class="pill pill-pending">Pending sync</span></td></tr>`;
+    html += `<tr><td>${p.id}</td><td>${new Date(p.timestamp).toLocaleTimeString()}</td><td>${p.name||'—'}</td><td>${p.whatsapp}</td><td>${itemsTxt}</td><td>RM${p.total}</td><td>${p.slipBase64?'attached':'—'}</td><td><span class="pill pill-pending">Pending sync</span></td></tr>`;
   });
   html += '</table>';
   document.getElementById('logTableWrap').innerHTML = html;
