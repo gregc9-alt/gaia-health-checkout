@@ -109,6 +109,11 @@
         <div class="price">RM80</div>
         <div class="desc">1 Ecobag · choose 1 flavour</div>
       </div>
+      <div class="set-card" onclick="startFlavorSelect('TRIAL_PACK')">
+        <div class="name">Trial Pack (5 flavours)</div>
+        <div class="price">RM10</div>
+        <div class="desc">1 pack · Avocado, Original, Chocolate, Oats, Purple Sweet Potato</div>
+      </div>
     </div>
     <div id="cartPreview" style="margin-top:20px;"></div>
     <button class="btn btn-primary" id="toCheckoutBtn" onclick="goToStep(3)" disabled>Proceed to Checkout &rarr;</button>
@@ -216,7 +221,12 @@ const SETS = {
   A: {name:'Set A — 14-Day Starter', price:40, boxSlots:2, ecobagSlots:0, free:[]},
   B: {name:'Set B — 60-Day Support Pack', price:159, boxSlots:4, ecobagSlots:1, free:['Trial Pack (5 flavours)']},
   C: {name:'Set C — 90-Day Gut Reset', price:240, boxSlots:1, ecobagSlots:3, free:['Trial Pack (5 flavours)']},
-  ECOBAG_SINGLE: {name:'Ecobag (Single)', price:80, boxSlots:0, ecobagSlots:1, free:[]}
+  ECOBAG_SINGLE: {name:'Ecobag (Single)', price:80, boxSlots:0, ecobagSlots:1, free:[]},
+  // Fixed-composition item — always the same 5 flavours, no picker needed.
+  // fixedFlavors is turned into pre-filled slots in startFlavorSelect() below,
+  // so it flows through the exact same cart/summary/logging code as everything else.
+  TRIAL_PACK: {name:'Trial Pack (5 flavours)', price:10, boxSlots:0, ecobagSlots:0, free:[],
+    fixedFlavors:['Avocado','Original','Chocolate','Oats','Purple Sweet Potato']}
 };
 const BOX_FLAVORS = ['Avocado','Original','Chocolate','Oats'];
 const ECOBAG_FLAVORS = ['Purple Sweet Potato','Avocado','Chocolate','Original','Oats'];
@@ -334,6 +344,16 @@ function startFlavorSelect(setKey){
   for(let i=0;i<set.boxSlots;i++) pendingSlots.push({type:'box', flavor:null});
   for(let i=0;i<set.ecobagSlots;i++) pendingSlots.push({type:'ecobag', flavor:null});
 
+  if (pendingSlots.length === 0) {
+    // Fixed-composition item with no flavour choice (e.g. Trial Pack, which is
+    // always the same 5 flavours) — skip the picker and add straight to cart.
+    if (set.fixedFlavors) {
+      pendingSlots = set.fixedFlavors.map(f => ({type:'fixed', flavor:f}));
+    }
+    confirmAddToCart();
+    return;
+  }
+
   document.getElementById('flavorSetName').textContent = set.name + (set.free.length? ' (+ '+set.free.join(', ')+' free)' : '');
   const wrap = document.getElementById('flavorSlots');
   wrap.innerHTML = '';
@@ -425,7 +445,7 @@ function buildOrderPayload(orderId){
     timestamp: new Date().toISOString(),
     name: document.getElementById('nameInput').value.trim(),
     whatsapp: document.getElementById('whatsappInput').value.trim(),
-    items: cart.map(i=>({ name: i.name, flavors: i.slots.map(s=>s.flavor) })),
+    items: cart.map(i=>({ name: i.name, flavors: i.slots.map(s=>s.flavor), free: i.free || [] })),
     total: cartTotalValue(),
     slipBase64: currentOrder.slip,
     source: 'checkout-page'
@@ -529,7 +549,11 @@ function renderLogTable(rows){
     html += `<tr><td>${r[0]}</td><td>${new Date(r[1]).toLocaleTimeString()}</td><td>${r[2]||'—'}</td><td>${r[3]}</td><td>${r[4]}</td><td>RM${r[5]}</td><td>${r[6]?`<a href="${r[6]}" target="_blank">view</a>`:'—'}</td><td><span class="pill pill-synced">Synced</span></td></tr>`;
   });
   pending.forEach(p=>{
-    const itemsTxt = p.items.map(i=>`${i.name} [${i.flavors.join('/')}]`).join('; ');
+    const itemsTxt = p.items.map(i=>{
+      let s = `${i.name} [${i.flavors.join('/')}]`;
+      if (i.free && i.free.length) s += ' + FREE: ' + i.free.join(', ');
+      return s;
+    }).join('; ');
     html += `<tr><td>${p.id}</td><td>${new Date(p.timestamp).toLocaleTimeString()}</td><td>${p.name||'—'}</td><td>${p.whatsapp}</td><td>${itemsTxt}</td><td>RM${p.total}</td><td>${p.slipBase64?'attached':'—'}</td><td><span class="pill pill-pending">Pending sync</span></td></tr>`;
   });
   html += '</table>';
