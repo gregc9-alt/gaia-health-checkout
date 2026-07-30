@@ -83,7 +83,7 @@
 <main>
 
   <section id="step1">
-    <div class="step-label">Step 1 of 5 — Add Item</div>
+    <div class="step-label">Step 1 — Add Item</div>
     <h2>Select a bundle or item</h2>
     <p class="sub">Tap an item to choose flavours. Add as many as needed for this order.</p>
     <div class="card-grid">
@@ -116,38 +116,65 @@
       </div>
     </div>
     <div id="cartPreview" style="margin-top:20px;"></div>
-    <button class="btn btn-primary" id="toCheckoutBtn" onclick="goToStep(3)" disabled>Proceed to Checkout &rarr;</button>
+    <button class="btn btn-primary" id="toCheckoutBtn" onclick="goToStep('step3')" disabled>Proceed to Checkout &rarr;</button>
   </section>
 
   <section id="step2" class="hidden">
-    <div class="step-label">Step 1 of 5 — Choose Flavours</div>
+    <div class="step-label">Step 1 — Choose Flavours</div>
     <h2 id="flavorSetName"></h2>
     <p class="sub">Tap a flavour for each slot.</p>
     <div id="flavorSlots"></div>
     <button class="btn btn-primary" id="addToCartBtn" onclick="confirmAddToCart()" disabled>Add to Order</button>
-    <button class="btn btn-ghost" onclick="goToStep(1)">Cancel</button>
+    <button class="btn btn-ghost" onclick="goToStep('step1')">Cancel</button>
   </section>
 
   <section id="step3" class="hidden">
-    <div class="step-label">Step 2 of 5 — Order Summary</div>
+    <div class="step-label">Step 2 — Order Summary</div>
     <h2>Confirm order</h2>
     <div id="cartSummary"></div>
     <div class="total-bar"><div class="label">Total</div><div class="amt" id="cartTotal">RM0</div></div>
-    <button class="btn btn-secondary" onclick="goToStep(1)">+ Add Another Item</button>
-    <button class="btn btn-primary" onclick="goToStep(4)">Continue &rarr;</button>
+    <button class="btn btn-secondary" onclick="goToStep('step1')">+ Add Another Item</button>
+    <button class="btn btn-primary" onclick="goToStep('step4')">Continue &rarr;</button>
   </section>
 
   <section id="step4" class="hidden">
-    <div class="step-label">Step 3 of 5 — Customer Contact</div>
+    <div class="step-label">Step 4 — Customer Contact</div>
     <h2>Customer details</h2>
     <p class="sub">Name is optional but helps with invoicing. WhatsApp number is required — format: 01XXXXXXXX</p>
     <input type="text" id="nameInput" placeholder="Customer name (optional)">
     <input type="tel" id="whatsappInput" placeholder="WhatsApp number, e.g. 0123456789" inputmode="numeric">
-    <button class="btn btn-primary" id="toPaymentBtn" onclick="goToStep(5)" disabled>Continue &rarr;</button>
+    <button class="btn btn-primary" id="toPaymentBtn" onclick="goToStep('step5')" disabled>Continue &rarr;</button>
   </section>
 
   <section id="step5" class="hidden">
-    <div class="step-label">Step 4 of 5 — Payment</div>
+    <div class="step-label">Step 5 — Payment Method</div>
+    <h2>How is the customer paying?</h2>
+    <p class="sub">Choose one — this decides whether a payment slip is needed.</p>
+    <div class="card-grid">
+      <div class="set-card" onclick="choosePaymentMethod('Cash')">
+        <div class="name">💵 Cash</div>
+        <div class="desc">No slip needed — confirm the amount collected and submit.</div>
+      </div>
+      <div class="set-card" onclick="choosePaymentMethod('E-wallet/Bank Transfer')">
+        <div class="name">📱 E-wallet / Bank Transfer</div>
+        <div class="desc">Customer scans the QR — you'll attach the payment slip next.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="stepCashConfirm" class="hidden">
+    <div class="step-label">Step 6 — Confirm Cash Payment</div>
+    <h2>Confirm cash received</h2>
+    <div class="big-amount">
+      <div class="rm" id="cashAmount">RM0</div>
+      <div class="note">Confirm you've collected this amount in cash before submitting.</div>
+    </div>
+    <button class="btn btn-primary" onclick="submitOrder()">Confirm &amp; Submit Order</button>
+    <button class="btn btn-ghost" onclick="goToStep('step5')">&larr; Back</button>
+  </section>
+
+  <section id="step6" class="hidden">
+    <div class="step-label">Step 6 — E-wallet / Bank Transfer</div>
     <h2>Pay this exact amount</h2>
     <div class="big-amount">
       <div class="rm" id="payAmount">RM0</div>
@@ -158,11 +185,11 @@
       <input type="checkbox" id="paymentConfirmCheck" onchange="toggleSlipBtn()">
       <label for="paymentConfirmCheck">I've paid this exact amount via the QR above</label>
     </div>
-    <button class="btn btn-primary" id="toSlipBtn" onclick="goToStep(6)" disabled>Continue &rarr;</button>
+    <button class="btn btn-primary" id="toSlipBtn" onclick="goToStep('step7')" disabled>Continue &rarr;</button>
   </section>
 
-  <section id="step6" class="hidden">
-    <div class="step-label">Step 5 of 5 — Payment Slip</div>
+  <section id="step7" class="hidden">
+    <div class="step-label">Step 7 — Payment Slip</div>
     <h2>Attach payment slip</h2>
     <div class="slip-box">
       <div id="slipPreviewWrap"></div>
@@ -172,14 +199,15 @@
     <button class="btn btn-primary" id="submitOrderBtn" onclick="submitOrder()" disabled>Submit Order</button>
   </section>
 
-  <section id="step7" class="hidden">
+  <section id="step8" class="hidden">
     <div class="success" id="successBox">
       <div class="check" id="successIcon">✓</div>
       <h2 id="successTitle">Order saved</h2>
       <p class="sub" id="successSub">Order ID</p>
       <div class="oid" id="successOrderId"></div>
-      <button class="btn btn-primary" onclick="resetOrder()">New Order</button>
     </div>
+    <div id="packingRecap" style="margin-top:18px;"></div>
+    <button class="btn btn-primary" onclick="resetOrder()">New Order</button>
   </section>
 
   <section id="logView" class="hidden">
@@ -234,7 +262,7 @@ const ECOBAG_FLAVORS = ['Purple Sweet Potato','Avocado','Chocolate','Original','
 let cart = [];
 let pendingSet = null;
 let pendingSlots = [];
-let currentOrder = {whatsapp:'', slip:null, slipMime:'image/jpeg'};
+let currentOrder = {whatsapp:'', slip:null, slipMime:'image/jpeg', paymentMethod:''};
 
 /* ================= QR RENDER ================= */
 (function renderQR(){
@@ -327,13 +355,28 @@ function updatePendingBadge(){
   document.getElementById('pendingCount').textContent = loadPending().length;
 }
 
-/* ================= NAVIGATION ================= */
-function goToStep(n){
-  ['step1','step2','step3','step4','step5','step6','step7'].forEach((id,i)=>{
-    document.getElementById(id).classList.toggle('hidden', (i+1)!==n);
+/* ================= NAVIGATION =================
+   goToStep takes a section id (string) rather than a numeric position —
+   the flow branches after Payment Method (Cash skips straight to a confirm
+   step, E-wallet goes via QR + slip), so a single linear index doesn't work.
+*/
+const FLOW_STEPS = ['step1','step2','step3','step4','step5','stepCashConfirm','step6','step7','step8'];
+function goToStep(id){
+  FLOW_STEPS.forEach(s=>{
+    document.getElementById(s).classList.toggle('hidden', s!==id);
   });
-  if(n===3) renderCartSummary();
-  if(n===5) document.getElementById('payAmount').textContent = 'RM'+cartTotalValue().toFixed(2);
+  if(id==='step3') renderCartSummary();
+  if(id==='step6') document.getElementById('payAmount').textContent = 'RM'+cartTotalValue().toFixed(2);
+  if(id==='stepCashConfirm') document.getElementById('cashAmount').textContent = 'RM'+cartTotalValue().toFixed(2);
+}
+
+function choosePaymentMethod(method){
+  currentOrder.paymentMethod = method;
+  if (method === 'Cash') {
+    goToStep('stepCashConfirm');
+  } else {
+    goToStep('step6');
+  }
 }
 
 /* ================= STEP 1: bundle -> flavour ================= */
@@ -367,7 +410,7 @@ function startFlavorSelect(setKey){
     wrap.appendChild(div);
   });
   document.getElementById('addToCartBtn').disabled = true;
-  goToStep(2);
+  goToStep('step2');
 }
 
 function pickFlavor(idx, flavor){
@@ -382,7 +425,7 @@ function confirmAddToCart(){
   const set = SETS[pendingSet];
   cart.push({ setKey: pendingSet, name: set.name, price: set.price, slots: pendingSlots.slice(), free: set.free.slice() });
   renderCartPreview();
-  goToStep(1);
+  goToStep('step1');
 }
 
 function renderCartPreview(){
@@ -448,7 +491,9 @@ function buildOrderPayload(orderId){
     items: cart.map(i=>({ name: i.name, flavors: i.slots.map(s=>s.flavor), free: i.free || [] })),
     total: cartTotalValue(),
     slipBase64: currentOrder.slip,
-    source: 'checkout-page'
+    source: 'checkout-page',
+    type: 'Sale',
+    paymentMethod: currentOrder.paymentMethod || ''
   };
 }
 
@@ -481,12 +526,36 @@ function showSuccess(orderId, synced){
     document.getElementById('successIcon').textContent = '⚠';
     document.getElementById('successTitle').textContent = 'Saved offline — will sync when online';
   }
-  goToStep(7);
+  renderPackingRecap();
+  goToStep('step8');
+}
+
+/**
+ * Shows exactly what to pack (bundle + every flavour chosen) and how the
+ * customer paid, right on the success screen — pulled from `cart` and
+ * currentOrder.paymentMethod, both still in memory at this point (they're
+ * only cleared in resetOrder(), which runs when staff tap "New Order").
+ * This is what replaces having to open the Google Sheet to check flavours.
+ */
+function renderPackingRecap(){
+  const isCash = currentOrder.paymentMethod === 'Cash';
+  const methodLabel = isCash ? '💵 Cash — collect payment now' : '📱 E-wallet / Bank Transfer — already paid';
+  let html = '<div class="step-label" style="margin-top:0;">Pack this order</div>';
+  html += cart.map(item=>`
+    <div class="cart-item">
+      <div>
+        <strong>${item.name}</strong>
+        <div class="meta">${item.slots.map(s=>s.flavor).join(', ')}${item.free.length? ' + FREE: '+item.free.join(', '):''}</div>
+      </div>
+      <div class="rm">RM${item.price}</div>
+    </div>`).join('');
+  html += `<div class="confirm-row" style="background:#fff;border-color:var(--line);"><label style="font-weight:700;">${methodLabel}</label></div>`;
+  document.getElementById('packingRecap').innerHTML = html;
 }
 
 function resetOrder(){
   cart = [];
-  currentOrder = {whatsapp:'', slip:null, slipMime:'image/jpeg'};
+  currentOrder = {whatsapp:'', slip:null, slipMime:'image/jpeg', paymentMethod:''};
   document.getElementById('nameInput').value = '';
   document.getElementById('whatsappInput').value = '';
   document.getElementById('paymentConfirmCheck').checked = false;
@@ -496,7 +565,7 @@ function resetOrder(){
   document.getElementById('toPaymentBtn').disabled = true;
   document.getElementById('toSlipBtn').disabled = true;
   renderCartPreview();
-  goToStep(1);
+  goToStep('step1');
 }
 
 /* ================= RETRY SYNC ================= */
@@ -529,7 +598,7 @@ document.getElementById('logBtn').addEventListener('click', ()=>{
 });
 function closeLog(){
   document.getElementById('logView').classList.add('hidden');
-  goToStep(1);
+  goToStep('step1');
 }
 function loadLogFromSheet(){
   document.getElementById('logTableWrap').innerHTML = 'Loading…';
@@ -544,9 +613,9 @@ function renderLogTable(rows){
     document.getElementById('logTableWrap').innerHTML = '<p class="sub">No orders yet today.</p>';
     return;
   }
-  let html = '<table><tr><th>Order ID</th><th>Time</th><th>Name</th><th>WhatsApp</th><th>Items</th><th>Total</th><th>Slip</th><th>Status</th></tr>';
+  let html = '<table><tr><th>Order ID</th><th>Time</th><th>Name</th><th>WhatsApp</th><th>Items</th><th>Total</th><th>Slip</th><th>Type</th><th>Payment</th><th>Status</th></tr>';
   (rows||[]).forEach(r=>{
-    html += `<tr><td>${r[0]}</td><td>${new Date(r[1]).toLocaleTimeString()}</td><td>${r[2]||'—'}</td><td>${r[3]}</td><td>${r[4]}</td><td>RM${r[5]}</td><td>${r[6]?`<a href="${r[6]}" target="_blank">view</a>`:'—'}</td><td><span class="pill pill-synced">Synced</span></td></tr>`;
+    html += `<tr><td>${r[0]}</td><td>${new Date(r[1]).toLocaleTimeString()}</td><td>${r[2]||'—'}</td><td>${r[3]}</td><td>${r[4]}</td><td>RM${r[5]}</td><td>${r[6]?`<a href="${r[6]}" target="_blank">view</a>`:'—'}</td><td>${r[8]||'—'}</td><td>${r[9]||'—'}</td><td><span class="pill pill-synced">Synced</span></td></tr>`;
   });
   pending.forEach(p=>{
     const itemsTxt = p.items.map(i=>{
@@ -554,7 +623,7 @@ function renderLogTable(rows){
       if (i.free && i.free.length) s += ' + FREE: ' + i.free.join(', ');
       return s;
     }).join('; ');
-    html += `<tr><td>${p.id}</td><td>${new Date(p.timestamp).toLocaleTimeString()}</td><td>${p.name||'—'}</td><td>${p.whatsapp}</td><td>${itemsTxt}</td><td>RM${p.total}</td><td>${p.slipBase64?'attached':'—'}</td><td><span class="pill pill-pending">Pending sync</span></td></tr>`;
+    html += `<tr><td>${p.id}</td><td>${new Date(p.timestamp).toLocaleTimeString()}</td><td>${p.name||'—'}</td><td>${p.whatsapp}</td><td>${itemsTxt}</td><td>RM${p.total}</td><td>${p.slipBase64?'attached':'—'}</td><td>${p.type||'Sale'}</td><td>${p.paymentMethod||'—'}</td><td><span class="pill pill-pending">Pending sync</span></td></tr>`;
   });
   html += '</table>';
   document.getElementById('logTableWrap').innerHTML = html;
