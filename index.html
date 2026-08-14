@@ -25,6 +25,8 @@
   .set-card .price{font-size:1.6rem;font-weight:800;color:var(--maroon-dark);margin:4px 0;}
   .set-card .desc{font-size:.85rem;color:#6b5a63;}
   .set-card .free{display:inline-block;background:#f1e6c8;color:#8a6d1a;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:6px;margin-top:6px;margin-right:4px;}
+  .set-card.selected{background:var(--maroon);border-color:var(--maroon);}
+  .set-card.selected .name,.set-card.selected .desc{color:#fff;}
   .flavor-slot{margin-bottom:18px;}
   .flavor-slot .slot-title{font-weight:700;margin-bottom:8px;font-size:.95rem;}
   .flavor-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
@@ -83,7 +85,7 @@
 <main>
 
   <section id="step1">
-    <div class="step-label">Step 1 of 5 — Add Item</div>
+    <div class="step-label">Step 1 of 6 — Add Item</div>
     <h2>Select a bundle or item</h2>
     <p class="sub">Tap an item to choose flavours. Add as many as needed for this order.</p>
     <div class="card-grid">
@@ -125,7 +127,7 @@
   </section>
 
   <section id="step2" class="hidden">
-    <div class="step-label">Step 1 of 5 — Choose Flavours</div>
+    <div class="step-label">Step 1 of 6 — Choose Flavours</div>
     <h2 id="flavorSetName"></h2>
     <p class="sub">Tap a flavour for each slot.</p>
     <div id="flavorSlots"></div>
@@ -134,7 +136,7 @@
   </section>
 
   <section id="step3" class="hidden">
-    <div class="step-label">Step 2 of 5 — Order Summary</div>
+    <div class="step-label">Step 2 of 6 — Order Summary</div>
     <h2>Confirm order</h2>
     <div id="cartSummary"></div>
     <div class="total-bar"><div class="label">Total</div><div class="amt" id="cartTotal">RM0</div></div>
@@ -143,7 +145,7 @@
   </section>
 
   <section id="step4" class="hidden">
-    <div class="step-label">Step 3 of 5 — Customer Contact</div>
+    <div class="step-label">Step 3 of 6 — Customer Contact</div>
     <h2>Customer details</h2>
     <p class="sub">Name is optional but helps with invoicing. WhatsApp number is required — format: 01XXXXXXXX</p>
     <input type="text" id="nameInput" placeholder="Customer name (optional)">
@@ -152,7 +154,31 @@
   </section>
 
   <section id="step5" class="hidden">
-    <div class="step-label">Step 4 of 5 — Payment</div>
+    <div class="step-label">Step 4 of 6 — Fulfillment</div>
+    <h2>Pickup or ship?</h2>
+    <p class="sub">If you don't have enough stock on hand right now, pick "Ship later" and take the address — it'll show up in the Ship Later tab for follow-up.</p>
+    <div class="card-grid">
+      <div class="set-card" id="fulfillPickupCard" onclick="selectFulfillment('pickup')">
+        <div class="name">📦 Picked up on the spot</div>
+        <div class="desc">Customer takes the item(s) with them now.</div>
+      </div>
+      <div class="set-card" id="fulfillShipCard" onclick="selectFulfillment('ship')">
+        <div class="name">🚚 Ship later</div>
+        <div class="desc">Not enough stock right now — take the order and ship once restocked.</div>
+      </div>
+    </div>
+    <div id="shipAddressForm" class="hidden" style="margin-top:16px;">
+      <input type="text" id="addrLine1" placeholder="Address line 1">
+      <input type="text" id="addrLine2" placeholder="Address line 2 (optional)">
+      <input type="text" id="addrCity" placeholder="City">
+      <input type="text" id="addrPostcode" placeholder="Postcode" inputmode="numeric">
+      <input type="text" id="addrState" placeholder="State (or country, if not Malaysia)">
+    </div>
+    <button class="btn btn-primary" id="toPaymentBtn2" onclick="goToStep(6)" disabled>Continue &rarr;</button>
+  </section>
+
+  <section id="step6" class="hidden">
+    <div class="step-label">Step 5 of 6 — Payment</div>
     <h2>Pay this exact amount</h2>
     <div class="big-amount">
       <div class="rm" id="payAmount">RM0</div>
@@ -163,11 +189,11 @@
       <input type="checkbox" id="paymentConfirmCheck" onchange="toggleSlipBtn()">
       <label for="paymentConfirmCheck">I've paid this exact amount via the QR above</label>
     </div>
-    <button class="btn btn-primary" id="toSlipBtn" onclick="goToStep(6)" disabled>Continue &rarr;</button>
+    <button class="btn btn-primary" id="toSlipBtn" onclick="goToStep(7)" disabled>Continue &rarr;</button>
   </section>
 
-  <section id="step6" class="hidden">
-    <div class="step-label">Step 5 of 5 — Payment Slip</div>
+  <section id="step7" class="hidden">
+    <div class="step-label">Step 6 of 6 — Payment Slip</div>
     <h2>Attach payment slip</h2>
     <div class="slip-box">
       <div id="slipPreviewWrap"></div>
@@ -177,7 +203,7 @@
     <button class="btn btn-primary" id="submitOrderBtn" onclick="submitOrder()" disabled>Submit Order</button>
   </section>
 
-  <section id="step7" class="hidden">
+  <section id="step8" class="hidden">
     <div class="success" id="successBox">
       <div class="check" id="successIcon">✓</div>
       <h2 id="successTitle">Order saved</h2>
@@ -241,6 +267,7 @@ let cart = [];
 let pendingSet = null;
 let pendingSlots = [];
 let currentOrder = {whatsapp:'', slip:null, slipMime:'image/jpeg'};
+let fulfillment = {type:null};
 
 /* ================= QR RENDER ================= */
 (function renderQR(){
@@ -335,11 +362,11 @@ function updatePendingBadge(){
 
 /* ================= NAVIGATION ================= */
 function goToStep(n){
-  ['step1','step2','step3','step4','step5','step6','step7'].forEach((id,i)=>{
+  ['step1','step2','step3','step4','step5','step6','step7','step8'].forEach((id,i)=>{
     document.getElementById(id).classList.toggle('hidden', (i+1)!==n);
   });
   if(n===3) renderCartSummary();
-  if(n===5) document.getElementById('payAmount').textContent = 'RM'+cartTotalValue().toFixed(2);
+  if(n===6) document.getElementById('payAmount').textContent = 'RM'+cartTotalValue().toFixed(2);
 }
 
 /* ================= STEP 1: bundle -> flavour ================= */
@@ -425,12 +452,37 @@ document.getElementById('whatsappInput').addEventListener('input', e=>{
   document.getElementById('toPaymentBtn').disabled = e.target.value.replace(/\D/g,'').length < 9;
 });
 
-/* ================= STEP 5 ================= */
+/* ================= STEP 5: Fulfillment ================= */
+function selectFulfillment(type){
+  fulfillment.type = type;
+  document.getElementById('fulfillPickupCard').classList.toggle('selected', type==='pickup');
+  document.getElementById('fulfillShipCard').classList.toggle('selected', type==='ship');
+  document.getElementById('shipAddressForm').classList.toggle('hidden', type!=='ship');
+  validateFulfillment();
+}
+function validateFulfillment(){
+  const btn = document.getElementById('toPaymentBtn2');
+  if(fulfillment.type==='pickup'){ btn.disabled=false; return; }
+  if(fulfillment.type==='ship'){
+    const line1 = document.getElementById('addrLine1').value.trim();
+    const city = document.getElementById('addrCity').value.trim();
+    const postcode = document.getElementById('addrPostcode').value.trim();
+    const state = document.getElementById('addrState').value.trim();
+    btn.disabled = !(line1 && city && postcode && state);
+    return;
+  }
+  btn.disabled = true;
+}
+['addrLine1','addrCity','addrPostcode','addrState'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', validateFulfillment);
+});
+
+/* ================= STEP 6 ================= */
 function toggleSlipBtn(){
   document.getElementById('toSlipBtn').disabled = !document.getElementById('paymentConfirmCheck').checked;
 }
 
-/* ================= STEP 6 ================= */
+/* ================= STEP 7 ================= */
 function handleSlip(e){
   const file = e.target.files[0];
   if(!file) return;
@@ -446,7 +498,7 @@ function handleSlip(e){
 
 /* ================= SUBMIT ================= */
 function buildOrderPayload(orderId){
-  return {
+  const payload = {
     id: orderId,
     timestamp: new Date().toISOString(),
     name: document.getElementById('nameInput').value.trim(),
@@ -456,6 +508,21 @@ function buildOrderPayload(orderId){
     slipBase64: currentOrder.slip,
     source: 'checkout-page'
   };
+  if (fulfillment.type === 'ship') {
+    payload.fulfillment = {
+      type: 'ship',
+      address: {
+        line1: document.getElementById('addrLine1').value.trim(),
+        line2: document.getElementById('addrLine2').value.trim(),
+        city: document.getElementById('addrCity').value.trim(),
+        postcode: document.getElementById('addrPostcode').value.trim(),
+        state: document.getElementById('addrState').value.trim()
+      }
+    };
+  } else {
+    payload.fulfillment = { type: 'pickup' };
+  }
+  return payload;
 }
 
 function submitOrder(){
@@ -487,12 +554,13 @@ function showSuccess(orderId, synced){
     document.getElementById('successIcon').textContent = '⚠';
     document.getElementById('successTitle').textContent = 'Saved offline — will sync when online';
   }
-  goToStep(7);
+  goToStep(8);
 }
 
 function resetOrder(){
   cart = [];
   currentOrder = {whatsapp:'', slip:null, slipMime:'image/jpeg'};
+  fulfillment = {type:null};
   document.getElementById('nameInput').value = '';
   document.getElementById('whatsappInput').value = '';
   document.getElementById('paymentConfirmCheck').checked = false;
@@ -500,7 +568,14 @@ function resetOrder(){
   document.getElementById('submitOrderBtn').disabled = true;
   document.getElementById('submitOrderBtn').textContent = 'Submit Order';
   document.getElementById('toPaymentBtn').disabled = true;
+  document.getElementById('toPaymentBtn2').disabled = true;
   document.getElementById('toSlipBtn').disabled = true;
+  document.getElementById('fulfillPickupCard').classList.remove('selected');
+  document.getElementById('fulfillShipCard').classList.remove('selected');
+  document.getElementById('shipAddressForm').classList.add('hidden');
+  ['addrLine1','addrLine2','addrCity','addrPostcode','addrState'].forEach(id=>{
+    document.getElementById(id).value = '';
+  });
   renderCartPreview();
   goToStep(1);
 }
