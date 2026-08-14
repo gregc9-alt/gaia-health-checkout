@@ -62,6 +62,8 @@
   .success .check{width:70px;height:70px;border-radius:50%;background:var(--green);color:#fff;font-size:2.2rem;line-height:70px;margin:0 auto 14px;}
   .success.offline .check{background:var(--gold);}
   .success .oid{font-family:monospace;font-size:1.1rem;background:#fff;padding:8px 14px;border-radius:8px;display:inline-block;margin-top:8px;border:1px solid var(--line);}
+  .packing-list h3{font-size:.85rem;text-transform:uppercase;letter-spacing:.06em;color:var(--maroon);margin:0 0 8px;}
+  .packing-list .fulfill-note{font-size:.85rem;background:#fff8ea;border:1px solid var(--gold);border-radius:8px;padding:10px 12px;margin-top:8px;}
   table{width:100%;border-collapse:collapse;font-size:.8rem;background:#fff;}
   th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;}
   th{background:var(--cream);}
@@ -79,7 +81,7 @@
 
 <header>
   <div class="brand">🌿 Gaia Health Checkout</div>
-  <button class="link" id="logBtn">Today's Orders</button>
+  <button class="link hidden" id="pendingSyncBtn" onclick="retrySync()">⚠ <span id="pendingCount">0</span> pending — Retry</button>
 </header>
 
 <main>
@@ -209,21 +211,9 @@
       <h2 id="successTitle">Order saved</h2>
       <p class="sub" id="successSub">Order ID</p>
       <div class="oid" id="successOrderId"></div>
+      <div class="packing-list" id="packingList" style="text-align:left;margin-top:18px;"></div>
       <button class="btn btn-primary" onclick="resetOrder()">New Order</button>
     </div>
-  </section>
-
-  <section id="logView" class="hidden">
-    <div class="step-label">Staff View</div>
-    <h2>Today's Orders</h2>
-    <div class="log-actions">
-      <button class="btn btn-secondary" onclick="loadLogFromSheet()">Refresh</button>
-      <button class="btn btn-secondary" onclick="retrySync()">Retry Sync (<span id="pendingCount">0</span>)</button>
-      <button class="btn btn-ghost" onclick="closeLog()">Close</button>
-    </div>
-    <div id="logBanner"></div>
-    <p class="sub">If this list doesn't load, the master record is always the <a href="#" id="sheetLink" target="_blank">Google Sheet directly</a>.</p>
-    <div id="logTableWrap">Loading…</div>
   </section>
 
 </main>
@@ -344,20 +334,15 @@ function submitViaHiddenForm(payload){
   });
 }
 
-function callGetTodaysOrders(){
-  if (typeof google !== 'undefined' && google.script && google.script.run) {
-    return new Promise((resolve, reject)=>{
-      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getTodaysOrders();
-    });
-  }
-  return fetch(API_URL + '?action=getOrders').then(r => r.json());
-}
-
 /* ================= OFFLINE QUEUE ================= */
 function loadPending(){ return JSON.parse(localStorage.getItem('gaia_pending_orders')||'[]'); }
 function savePending(list){ localStorage.setItem('gaia_pending_orders', JSON.stringify(list)); }
 function updatePendingBadge(){
-  document.getElementById('pendingCount').textContent = loadPending().length;
+  const count = loadPending().length;
+  document.getElementById('pendingCount').textContent = count;
+  const btn = document.getElementById('pendingSyncBtn');
+  btn.classList.toggle('hidden', count === 0);
+  btn.innerHTML = '⚠ <span id="pendingCount">'+count+'</span> pending — Retry';
 }
 
 /* ================= NAVIGATION ================= */
@@ -554,7 +539,37 @@ function showSuccess(orderId, synced){
     document.getElementById('successIcon').textContent = '⚠';
     document.getElementById('successTitle').textContent = 'Saved offline — will sync when online';
   }
+  renderPackingList();
   goToStep(8);
+}
+
+// Renders what's in THIS order right on the success screen, so whoever's at
+// the table can pack it immediately without needing to open the Sheet.
+// Must run before resetOrder() clears cart/fulfillment (i.e. only from
+// showSuccess(), never after "New Order" is clicked).
+function renderPackingList(){
+  const itemsHtml = cart.map(item=>`
+    <div class="cart-item">
+      <div><strong>${item.name}</strong>
+        <div class="meta">${item.slots.map(s=>s.flavor).join(', ')}${item.free.length? ' + FREE: '+item.free.join(', '):''}</div>
+      </div>
+      <div class="rm">RM${item.price}</div>
+    </div>`).join('');
+
+  let fulfillHtml = '';
+  if(fulfillment.type === 'ship'){
+    const line1 = document.getElementById('addrLine1').value.trim();
+    const line2 = document.getElementById('addrLine2').value.trim();
+    const city = document.getElementById('addrCity').value.trim();
+    const postcode = document.getElementById('addrPostcode').value.trim();
+    const state = document.getElementById('addrState').value.trim();
+    const addr = [line1, line2, city, postcode, state].filter(Boolean).join(', ');
+    fulfillHtml = `<div class="fulfill-note">🚚 <strong>Ship later</strong> — not packed now. Ship to: ${addr}</div>`;
+  } else {
+    fulfillHtml = `<div class="fulfill-note">📦 <strong>Pack this now</strong> — customer is picking up on the spot.</div>`;
+  }
+
+  document.getElementById('packingList').innerHTML = `<h3>What to pack</h3>${itemsHtml}${fulfillHtml}`;
 }
 
 function resetOrder(){
@@ -580,19 +595,22 @@ function resetOrder(){
   goToStep(1);
 }
 
-/* ================= RETRY SYNC ================= */
+/* ================= RETRY SYNC =================
+   Orders that failed to POST (offline / bad connection) sit in this
+   device's localStorage. The button only appears when there's something
+   pending — no customer ever sees it otherwise. This does NOT show any
+   order history; for that, staff use the separate staff.html page. */
 function retrySync(){
   const pending = loadPending();
-  if(pending.length===0){ document.getElementById('logBanner').innerHTML = '<div class="banner">Nothing to sync.</div>'; return; }
-  document.getElementById('logBanner').innerHTML = '<div class="banner">Syncing '+pending.length+' order(s)…</div>';
+  const btn = document.getElementById('pendingSyncBtn');
+  if(pending.length===0){ return; }
+  btn.textContent = 'Syncing…';
   let remaining = pending.slice();
   const still = [];
   function next(){
     if(remaining.length===0){
       savePending(still);
       updatePendingBadge();
-      document.getElementById('logBanner').innerHTML = '<div class="banner">Sync complete. '+still.length+' order(s) still pending.</div>';
-      loadLogFromSheet();
       return;
     }
     const order = remaining.shift();
@@ -601,51 +619,9 @@ function retrySync(){
   next();
 }
 
-/* ================= STAFF LOG VIEW ================= */
-document.getElementById('logBtn').addEventListener('click', ()=>{
-  document.querySelectorAll('main > section').forEach(s=>s.classList.add('hidden'));
-  document.getElementById('logView').classList.remove('hidden');
-  updatePendingBadge();
-  loadLogFromSheet();
-});
-function closeLog(){
-  document.getElementById('logView').classList.add('hidden');
-  goToStep(1);
-}
-function loadLogFromSheet(){
-  document.getElementById('logTableWrap').innerHTML = 'Loading…';
-  callGetTodaysOrders()
-    .then(renderLogTable)
-    .catch(function(){ document.getElementById('logTableWrap').innerHTML = '<p class="sub">Could not load the list here — open the Google Sheet link above to see all orders.</p>'; });
-}
-function renderLogTable(rows){
-  const pending = loadPending();
-  updatePendingBadge();
-  if((!rows || rows.length===0) && pending.length===0){
-    document.getElementById('logTableWrap').innerHTML = '<p class="sub">No orders yet today.</p>';
-    return;
-  }
-  let html = '<table><tr><th>Order ID</th><th>Time</th><th>Name</th><th>WhatsApp</th><th>Items</th><th>Total</th><th>Slip</th><th>Status</th></tr>';
-  (rows||[]).forEach(r=>{
-    html += `<tr><td>${r[0]}</td><td>${new Date(r[1]).toLocaleTimeString()}</td><td>${r[2]||'—'}</td><td>${r[3]}</td><td>${r[4]}</td><td>RM${r[5]}</td><td>${r[6]?`<a href="${r[6]}" target="_blank">view</a>`:'—'}</td><td><span class="pill pill-synced">Synced</span></td></tr>`;
-  });
-  pending.forEach(p=>{
-    const itemsTxt = p.items.map(i=>{
-      let s = `${i.name} [${i.flavors.join('/')}]`;
-      if (i.free && i.free.length) s += ' + FREE: ' + i.free.join(', ');
-      return s;
-    }).join('; ');
-    html += `<tr><td>${p.id}</td><td>${new Date(p.timestamp).toLocaleTimeString()}</td><td>${p.name||'—'}</td><td>${p.whatsapp}</td><td>${itemsTxt}</td><td>RM${p.total}</td><td>${p.slipBase64?'attached':'—'}</td><td><span class="pill pill-pending">Pending sync</span></td></tr>`;
-  });
-  html += '</table>';
-  document.getElementById('logTableWrap').innerHTML = html;
-}
-
 /* ================= INIT ================= */
 renderCartPreview();
 updatePendingBadge();
-const sheetLinkEl = document.getElementById('sheetLink');
-if (sheetLinkEl) sheetLinkEl.href = SHEET_URL;
 </script>
 
 </body>
