@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Gaia Health — Staff: Today's Orders</title>
+<style>
+  :root{
+    --maroon:#5c1f3d; --maroon-dark:#431730; --cream:#f8f1e4;
+    --gold:#c9a227; --green:#4a7c3f; --ink:#2b1a22; --line:#e4d7c2; --danger:#b23b3b;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--cream);color:var(--ink);}
+  header{background:var(--maroon);color:#fff;padding:14px 18px;position:sticky;top:0;z-index:20;box-shadow:0 2px 6px rgba(0,0,0,.15);}
+  header .brand{font-weight:700;font-size:1.05rem;}
+  main{padding:16px;max-width:900px;margin:0 auto;}
+  h2{margin:0 0 6px;font-size:1.3rem;color:var(--maroon-dark);}
+  p.sub{margin:0 0 16px;color:#6b5a63;font-size:.92rem;}
+  input[type=password],input[type=text]{width:100%;max-width:320px;padding:14px;font-size:1.05rem;border:2px solid var(--line);border-radius:12px;margin-bottom:10px;}
+  .btn{display:inline-block;padding:12px 22px;border:none;border-radius:10px;font-size:.95rem;font-weight:700;cursor:pointer;background:var(--maroon);color:#fff;}
+  .btn-secondary{background:#fff;color:var(--maroon);border:2px solid var(--maroon);}
+  .log-actions{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+  table{width:100%;border-collapse:collapse;font-size:.8rem;background:#fff;}
+  th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top;}
+  th{background:var(--cream);}
+  .pill{display:inline-block;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:6px;}
+  .pill-ship{background:#e6effa;color:#2a5a92;}
+  .pill-pickup{background:#dcefda;color:#2e6b28;}
+  .banner{background:#fdecc8;color:#6b5417;border:1px solid var(--gold);border-radius:10px;padding:10px 14px;font-size:.85rem;margin-bottom:12px;}
+  .hidden{display:none !important;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">🌿 Gaia Health — Staff: Today's Orders</div>
+</header>
+
+<main>
+
+  <section id="gateView">
+    <h2>Staff passcode</h2>
+    <p class="sub">This page is not linked from the customer checkout page. Enter the staff passcode to view today's orders, packing details, and payment slips.</p>
+    <input type="password" id="keyInput" placeholder="Passcode">
+    <br>
+    <button class="btn" onclick="tryKey()">View Orders</button>
+    <div id="gateError" class="banner hidden">Wrong passcode — try again.</div>
+  </section>
+
+  <section id="ordersView" class="hidden">
+    <div class="log-actions">
+      <button class="btn btn-secondary" onclick="loadOrders()">Refresh</button>
+      <button class="btn btn-secondary" onclick="signOut()">Sign out</button>
+    </div>
+    <p class="sub">Master record is always the <a href="#" id="sheetLink" target="_blank">Google Sheet directly</a> — use this page for a quick packing/shipping view.</p>
+    <div id="tableWrap">Loading…</div>
+  </section>
+
+</main>
+
+<script>
+// Must match STAFF_KEY in Code.gs exactly. Change both together.
+const API_URL = "https://script.google.com/macros/s/AKfycbyBkEvPdkodOd4AlKY4xtiJnZ75W73fqMJkdEd-kWE5xdRbiJFJC6oHaAt9DjzFurZzhQ/exec";
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/1Hq4Y1j-z9d6rTo6YmIL-at7bRX2zt3BJrWxCMIZOhjk/edit";
+
+document.getElementById('sheetLink').href = SHEET_URL;
+
+function getStoredKey(){ return sessionStorage.getItem('gaia_staff_key') || ''; }
+
+function tryKey(){
+  const key = document.getElementById('keyInput').value.trim();
+  if(!key) return;
+  sessionStorage.setItem('gaia_staff_key', key);
+  loadOrders();
+}
+
+function signOut(){
+  sessionStorage.removeItem('gaia_staff_key');
+  document.getElementById('ordersView').classList.add('hidden');
+  document.getElementById('gateView').classList.remove('hidden');
+  document.getElementById('keyInput').value = '';
+}
+
+function loadOrders(){
+  const key = getStoredKey();
+  if(!key){ return; }
+  document.getElementById('gateError').classList.add('hidden');
+  fetch(API_URL + '?action=getOrders&key=' + encodeURIComponent(key))
+    .then(r => r.json())
+    .then(res => {
+      if (res && res.status === 'error') {
+        sessionStorage.removeItem('gaia_staff_key');
+        document.getElementById('gateError').classList.remove('hidden');
+        document.getElementById('ordersView').classList.add('hidden');
+        document.getElementById('gateView').classList.remove('hidden');
+        return;
+      }
+      document.getElementById('gateView').classList.add('hidden');
+      document.getElementById('ordersView').classList.remove('hidden');
+      renderTable(res);
+    })
+    .catch(() => {
+      document.getElementById('tableWrap').innerHTML = '<p class="sub">Could not load — check your connection, or open the Google Sheet link above.</p>';
+    });
+}
+
+function renderTable(rows){
+  if(!rows || rows.length===0){
+    document.getElementById('tableWrap').innerHTML = '<p class="sub">No orders yet today.</p>';
+    return;
+  }
+  let html = '<table><tr><th>Order ID</th><th>Time</th><th>Name</th><th>WhatsApp</th><th>Items</th><th>Total</th><th>Slip</th><th>Fulfillment</th><th>Ship Address</th></tr>';
+  rows.forEach(r=>{
+    // columns: 0 Order ID, 1 Timestamp, 2 Name, 3 WhatsApp, 4 Items, 5 Total,
+    // 6 Slip Link, 7 Source, 8 (Greg's manual Type), 9 (Greg's manual Payment
+    // Method), 10 Fulfillment, 11 Shipping Address
+    const fulfillment = r[10] || 'Pickup';
+    const pillClass = fulfillment === 'Ship' ? 'pill-ship' : 'pill-pickup';
+    const address = r[11] || '—';
+    html += `<tr>
+      <td>${r[0]}</td>
+      <td>${new Date(r[1]).toLocaleTimeString()}</td>
+      <td>${r[2]||'—'}</td>
+      <td>${r[3]}</td>
+      <td>${r[4]}</td>
+      <td>RM${r[5]}</td>
+      <td>${r[6]?`<a href="${r[6]}" target="_blank">view</a>`:'—'}</td>
+      <td><span class="pill ${pillClass}">${fulfillment}</span></td>
+      <td>${fulfillment==='Ship' ? address : '—'}</td>
+    </tr>`;
+  });
+  html += '</table>';
+  document.getElementById('tableWrap').innerHTML = html;
+}
+
+// Auto-load if a passcode was already entered earlier this session.
+if (getStoredKey()) loadOrders();
+</script>
+
+</body>
+</html>
