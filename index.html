@@ -81,6 +81,7 @@
 
 <header>
   <div class="brand">🌿 Gaia Health Checkout</div>
+  <button class="link" onclick="openAmend()">✎ Change flavours</button>
   <button class="link hidden" id="pendingSyncBtn" onclick="retrySync()">⚠ <span id="pendingCount">0</span> pending — Retry</button>
 </header>
 
@@ -222,6 +223,19 @@
     </div>
   </section>
 
+<section id="step9" class="hidden">
+<div class="step-label">Staff — Change flavours</div>
+<h2>Find an order</h2>
+<p class="sub">Type the customer's phone number or the order ID. Shows today's orders only.</p>
+<div id="amendFind">
+<input type="text" id="amendQuery" placeholder="Phone number or order ID" onkeydown="if(event.key==='Enter')amendSearch()">
+<button class="btn btn-primary" onclick="amendSearch()">Search</button>
+<p class="sub" id="amendMsg"></p>
+<div id="amendResults"></div>
+</div>
+<div id="amendEdit" class="hidden"></div>
+<button class="btn btn-ghost" onclick="goToStep(1)">Back to checkout</button>
+</section>
 </main>
 
 <script>
@@ -354,7 +368,7 @@ function updatePendingBadge(){
 
 /* ================= NAVIGATION ================= */
 function goToStep(n){
-  ['step1','step2','step3','step4','step5','step6','step7','step8'].forEach((id,i)=>{
+  ['step1','step2','step3','step4','step5','step6','step7','step8','step9'].forEach((id,i)=>{
     document.getElementById(id).classList.toggle('hidden', (i+1)!==n);
   });
   if(n===3) renderCartSummary();
@@ -657,6 +671,138 @@ function retrySync(){
     callLogOrder(order).then(function(){ next(); }).catch(function(){ still.push(order); next(); });
   }
   next();
+}
+
+/* ================= FLAVOUR CHANGE (staff) ================= */
+let amendRows = [], amendHits = [], amendOrder = null, amendItems = [];
+const SEL_STYLE = 'width:100%;padding:14px;font-size:1.05rem;border:2px solid var(--line);border-radius:10px;background:#fff;margin-bottom:8px;';
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function openAmend(){
+  document.getElementById('amendQuery').value = '';
+  document.getElementById('amendMsg').textContent = '';
+  document.getElementById('amendResults').innerHTML = '';
+  document.getElementById('amendEdit').classList.add('hidden');
+  document.getElementById('amendFind').classList.remove('hidden');
+  goToStep(9);
+}
+function amendKey(){
+  let k = localStorage.getItem('gaia_staff_key');
+  if (!k) { k = (prompt('Enter the staff key (asked once on this tablet)') || '').trim(); if (k) localStorage.setItem('gaia_staff_key', k); }
+  return k;
+}
+function amendSearch(){
+  const q = document.getElementById('amendQuery').value.trim();
+  const msg = document.getElementById('amendMsg');
+  if (!q) return;
+  const k = amendKey();
+  if (!k) { msg.textContent = 'Staff key needed to look up orders.'; return; }
+  msg.textContent = 'Searching today\'s orders…';
+  fetch(API_URL + '?action=getOrders&key=' + encodeURIComponent(k)).then(function(r){ return r.json(); }).then(function(res){
+    if (!Array.isArray(res)) { localStorage.removeItem('gaia_staff_key'); msg.textContent = 'Staff key not accepted. Tap Search to try again.'; return; }
+    amendRows = res; amendRender(q);
+  }).catch(function(){ msg.textContent = 'Could not reach the order sheet. Check the internet and try again.'; });
+}
+function amendBuild(rows){
+  const asc = rows.slice().reverse(), orders = {}, list = [];
+  asc.forEach(function(r){
+    const id = String(r[0]), src = String(r[7] || ''), items = String(r[4] || '');
+    if (src === 'flavour-change') {
+      items.split('; ').forEach(function(part){
+        const m = /^FLAVOUR CHANGE of (\S+) item (\d+): .*? \[(.*)\]$/.exec(part);
+        if (m && orders[m[1]]) orders[m[1]].over[Number(m[2]) - 1] = m[3];
+      });
+      return;
+    }
+    if (src === 'internal-use') return;
+    const o = { id: id, time: r[1], name: String(r[2] || ''), phone: String(r[3] || ''), total: r[5], raw: items, over: {} };
+    orders[id] = o; list.push(o);
+  });
+  return list.reverse();
+}
+function amendItemsOf(o){
+  return o.raw.split('; ').map(function(part, idx){
+    const m = /^(.*?) \[(.*)\](?: \+ FREE: (.*))?$/.exec(part);
+    if (!m) return { idx: idx, text: part, editable: false };
+    const key = Object.keys(SETS).filter(function(k){ return SETS[k].name === m[1]; })[0];
+    const cur = (o.over[idx] !== undefined) ? o.over[idx] : m[2];
+    const set = key ? SETS[key] : null;
+    const editable = !!set && !set.fixedFlavors && (set.boxSlots + set.ecobagSlots > 0);
+    return { idx: idx, key: key, set: set, name: m[1], cur: cur, free: m[3] || '', editable: editable, text: m[1] + ' [' + cur + ']' + (m[3] ? ' + FREE: ' + m[3] : '') };
+  });
+}
+function amendRender(q){
+  const digits = q.replace(/\D/g, ''), up = q.toUpperCase();
+  const all = amendBuild(amendRows);
+  amendHits = all.filter(function(o){
+    const pd = o.phone.replace(/\D/g, '');
+    return (digits.length >= 6 && pd.indexOf(digits.slice(-8)) >= 0) || o.id.toUpperCase().indexOf(up) >= 0;
+  });
+  const msg = document.getElementById('amendMsg');
+  msg.textContent = amendHits.length ? (amendHits.length + ' order(s) found today. Tap the one to change.') : 'No order found today for that phone number or ID.';
+  document.getElementById('amendResults').innerHTML = amendHits.map(function(o, i){
+    const t = new Date(o.time); const hhmm = isNaN(t) ? '' : t.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    return '<div class="set-card" onclick="amendPick(' + i + ')"><div class="name">' + esc(o.id) + ' · ' + esc(hhmm) + (o.name ? ' · ' + esc(o.name) : '') + '</div><div class="desc">' + amendItemsOf(o).map(function(it){ return esc(it.text); }).join('<br>') + '</div><div class="price" style="font-size:1.1rem">RM' + esc(o.total) + '</div></div>';
+  }).join('');
+}
+function amendPick(i){
+  amendOrder = amendHits[i]; amendItems = amendItemsOf(amendOrder);
+  let h = '<div class="step-label">' + esc(amendOrder.id) + '</div><h2>Change flavours</h2><p class="sub">Only the flavours can change. Quantity and price stay the same.</p>';
+  amendItems.forEach(function(it, n){
+    h += '<div class="flavor-slot"><div class="slot-title">' + esc(it.name || it.text) + '</div>';
+    if (!it.editable) { h += '<p class="sub">' + esc(it.text) + ' (fixed item, no flavour choice)</p></div>'; return; }
+    const parts = it.cur.split('/');
+    if (it.set.bulk) {
+      const cnt = {}; parts.forEach(function(p){ const m = /^(.*) x(\d+)$/.exec(p); if (m) cnt[m[1]] = Number(m[2]); });
+      BOX_FLAVORS.forEach(function(f){ h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-weight:600">' + f + '</span><input type="text" inputmode="numeric" data-amend="' + n + '" data-f="' + f + '" value="' + (cnt[f] || 0) + '" style="width:90px;text-align:center" oninput="amendBulkCheck(' + n + ')"></div>'; });
+      h += '<div class="sub" id="amendBulkMsg' + n + '"></div>';
+    } else {
+      if (parts.length !== it.set.boxSlots + it.set.ecobagSlots) { h += '<p class="sub">' + esc(it.text) + ' (cannot be edited here)</p></div>'; it.editable = false; return; }
+      parts.forEach(function(p, s){
+        const opts = (s < it.set.boxSlots ? BOX_FLAVORS : ECOBAG_FLAVORS).map(function(f){ return '<option' + (f === p ? ' selected' : '') + '>' + f + '</option>'; }).join('');
+        h += '<label class="sub" style="display:block;margin:6px 0 2px">' + (s < it.set.boxSlots ? 'Box ' + (s + 1) : 'Ecobag ' + (s + 1 - it.set.boxSlots)) + '</label><select data-amend="' + n + '" data-s="' + s + '" style="' + SEL_STYLE + '">' + opts + '</select>';
+      });
+    }
+    h += '</div>';
+  });
+  h += '<p class="sub" id="amendErr" style="color:var(--danger)"></p><button class="btn btn-primary" onclick="amendSave()">Save changes</button><button class="btn btn-ghost" onclick="openAmend()">Cancel</button>';
+  const box = document.getElementById('amendEdit');
+  box.innerHTML = h; box.classList.remove('hidden');
+  document.getElementById('amendFind').classList.add('hidden');
+  amendItems.forEach(function(it, n){ if (it.editable && it.set.bulk) amendBulkCheck(n); });
+}
+function amendBulkTotal(n){ let t = 0; document.querySelectorAll('[data-amend="' + n + '"][data-f]').forEach(function(el){ t += parseInt(el.value, 10) || 0; }); return t; }
+function amendBulkCheck(n){ const need = amendItems[n].set.boxSlots, t = amendBulkTotal(n); document.getElementById('amendBulkMsg' + n).textContent = 'Boxes: ' + t + ' / ' + need + (t === need ? '  ✔' : ''); }
+function amendNewFlavors(n){
+  const it = amendItems[n];
+  if (it.set.bulk) {
+    const out = [];
+    document.querySelectorAll('[data-amend="' + n + '"][data-f]').forEach(function(el){ const c = parseInt(el.value, 10) || 0; if (c > 0) out.push(el.getAttribute('data-f') + ' x' + c); });
+    return out;
+  }
+  return Array.prototype.map.call(document.querySelectorAll('select[data-amend="' + n + '"]'), function(el){ return el.value; });
+}
+function amendSave(){
+  const err = document.getElementById('amendErr'); err.textContent = '';
+  const changed = [];
+  for (let n = 0; n < amendItems.length; n++) {
+    const it = amendItems[n]; if (!it.editable) continue;
+    if (it.set.bulk && amendBulkTotal(n) !== it.set.boxSlots) { err.textContent = 'Set D must total exactly ' + it.set.boxSlots + ' boxes.'; return; }
+    const nf = amendNewFlavors(n);
+    if (nf.join('/') !== it.cur) changed.push({ idx: it.idx, name: it.name, was: it.cur, flavors: nf });
+  }
+  if (!changed.length) { err.textContent = 'No flavours were changed.'; return; }
+  const payload = {
+    id: 'GH-AMEND-' + Date.now().toString(36).toUpperCase(),
+    timestamp: new Date().toISOString(),
+    name: amendOrder.name, whatsapp: amendOrder.phone,
+    items: changed.map(function(c){ return { name: 'FLAVOUR CHANGE of ' + amendOrder.id + ' item ' + (c.idx + 1) + ': ' + c.name + ' (was: ' + c.was + ')', flavors: c.flavors, free: [] }; }),
+    total: 0, slipBase64: '', source: 'flavour-change'
+  };
+  const summary = changed.map(function(c){ return c.name + ': ' + c.flavors.join(', '); }).join(' | ');
+  const done = function(queued){
+    document.getElementById('amendEdit').innerHTML = '<div class="step-label">Saved</div><h2>' + (queued ? 'Saved on this tablet' : 'Flavours updated') + '</h2><p class="sub">' + esc(amendOrder.id) + '<br>' + esc(summary) + '</p>' + (queued ? '<p class="sub">No connection. It will send when you tap Retry at the top.</p>' : '') + '<button class="btn btn-primary" onclick="goToStep(1)">Done</button>';
+  };
+  callLogOrder(payload).then(function(){ done(false); }).catch(function(){ const p = loadPending(); p.push(payload); savePending(p); updatePendingBadge(); done(true); });
 }
 
 /* ================= INIT ================= */
