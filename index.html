@@ -188,18 +188,34 @@
 
   <section id="step6" class="hidden">
     <div class="step-label">Step 5 of 6 — Payment</div>
-    <h2>Pay this exact amount</h2>
-    <div class="big-amount">
-      <div class="rm" id="payAmount">RM0</div>
-      <div class="note">This QR is static — you must type this amount manually in your banking app before paying.</div>
+    <h2>How is this being paid?</h2>
+    <div class="card-grid">
+    <div class="set-card" id="payDigitalCard" onclick="selectPaymentMethod('digital')">
+    <div class="name">💳 Pay Digitally (QR)</div>
+    <div class="desc">Customer scans and pays now.</div>
     </div>
+    <div class="set-card" id="payCashCard" onclick="selectPaymentMethod('cash')">
+    <div class="name">💵 Cash</div>
+    <div class="desc">Staff collects cash on the spot.</div>
+    </div>
+    </div>
+    <div class="big-amount">
+    <div class="rm" id="payAmount">RM0</div>
+    </div>
+    <div id="digitalPayBlock" class="hidden">
+    <div class="note">This QR is static — you must type this amount manually in your banking app before paying.</div>
     <div class="qr-wrap" id="qrWrap"></div>
     <div class="confirm-row">
-      <input type="checkbox" id="paymentConfirmCheck" onchange="toggleSlipBtn()">
-      <label for="paymentConfirmCheck">I've paid this exact amount via the QR above</label>
+    <input type="checkbox" id="paymentConfirmCheck" onchange="validatePaymentStep()">
+    <label for="paymentConfirmCheck">I've paid this exact amount via the QR above</label>
     </div>
-    <button class="btn btn-primary" id="toSlipBtn" onclick="goToStep(7)" disabled>Continue &rarr;</button>
-  </section>
+    </div>
+    <div id="cashPayBlock" class="hidden" style="margin-top:16px;">
+    <p class="sub">Cash collected on the spot. Enter who is holding the cash.</p>
+    <input type="text" id="cashCollectedByInput" placeholder="Cash collected by (e.g. Greg)" oninput="validatePaymentStep()">
+    </div>
+    <button class="btn btn-primary" id="toSlipBtn" onclick="onPaymentContinue()" disabled>Continue &rarr;</button>
+    </section>>
 
   <section id="step7" class="hidden">
     <div class="step-label">Step 6 of 6 — Payment Slip</div>
@@ -517,8 +533,23 @@ function validateFulfillment(){
 });
 
 /* ================= STEP 6 ================= */
-function toggleSlipBtn(){
-  document.getElementById('toSlipBtn').disabled = !document.getElementById('paymentConfirmCheck').checked;
+var paymentMethod = null;
+function selectPaymentMethod(method){
+paymentMethod = method;
+document.getElementById('payDigitalCard').classList.toggle('selected', method==='digital');
+document.getElementById('payCashCard').classList.toggle('selected', method==='cash');
+document.getElementById('digitalPayBlock').classList.toggle('hidden', method!=='digital');
+document.getElementById('cashPayBlock').classList.toggle('hidden', method!=='cash');
+validatePaymentStep();
+}
+function validatePaymentStep(){
+const btn = document.getElementById('toSlipBtn');
+if(paymentMethod==='cash'){ btn.disabled = !document.getElementById('cashCollectedByInput').value.trim(); return; }
+if(paymentMethod==='digital'){ btn.disabled = !document.getElementById('paymentConfirmCheck').checked; return; }
+btn.disabled = true;
+}
+function onPaymentContinue(){
+if(paymentMethod==='cash'){ submitOrder(); } else { goToStep(7); }
 }
 
 /* ================= STEP 7 ================= */
@@ -545,7 +576,9 @@ function buildOrderPayload(orderId){
     items: cart.map(i=>({ name: i.name, flavors: (i.setKey === 'D' ? compressFlavors(i.slots) : i.slots.map(s=>s.flavor)), free: i.free || [] })),
     total: cartTotalValue(),
     slipBase64: currentOrder.slip,
-    source: 'checkout-page'
+    source: 'checkout-page',
+    paymentMethod: paymentMethod,
+    cashCollectedBy: paymentMethod==='cash' ? document.getElementById('cashCollectedByInput').value.trim() : ''
   };
   if (fulfillment.type === 'ship') {
     payload.fulfillment = {
@@ -639,6 +672,12 @@ function resetOrder(){
   document.getElementById('toPaymentBtn').disabled = true;
   document.getElementById('toPaymentBtn2').disabled = true;
   document.getElementById('toSlipBtn').disabled = true;
+  paymentMethod = null;
+  document.getElementById('cashCollectedByInput').value = '';
+  document.getElementById('payDigitalCard').classList.remove('selected');
+  document.getElementById('payCashCard').classList.remove('selected');
+  document.getElementById('digitalPayBlock').classList.add('hidden');
+  document.getElementById('cashPayBlock').classList.add('hidden');
   document.getElementById('fulfillPickupCard').classList.remove('selected');
   document.getElementById('fulfillShipCard').classList.remove('selected');
   document.getElementById('shipAddressForm').classList.add('hidden');
