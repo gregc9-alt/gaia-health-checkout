@@ -151,7 +151,9 @@
     <div class="total-bar"><div class="label">Total</div><div class="amt" id="cartTotal">RM0</div></div>
     <button class="btn btn-secondary" onclick="goToStep(1)">+ Add Another Item</button>
     <button class="btn btn-primary" onclick="goToStep(4)">Continue &rarr;</button>
-  </section>
+  
+<button class="btn btn-ghost" onclick="cancelOrder()">Cancel order</button>
+</section>
 
   <section id="step4" class="hidden">
     <div class="step-label">Step 3 of 6 — Customer Contact</div>
@@ -160,7 +162,9 @@
     <input type="text" id="nameInput" placeholder="Customer name (optional)">
     <input type="tel" id="whatsappInput" placeholder="WhatsApp number, e.g. 0123456789" inputmode="numeric">
     <button class="btn btn-primary" id="toPaymentBtn" onclick="goToStep(5)" disabled>Continue &rarr;</button>
-  </section>
+  
+<button class="btn btn-ghost" onclick="cancelOrder()">Cancel order</button>
+</section>
 
   <section id="step5" class="hidden">
     <div class="step-label">Step 4 of 6 — Fulfillment</div>
@@ -184,7 +188,9 @@
       <input type="text" id="addrState" placeholder="State (or country, if not Malaysia)">
     </div>
     <button class="btn btn-primary" id="toPaymentBtn2" onclick="goToStep(6)" disabled>Continue &rarr;</button>
-  </section>
+  
+<button class="btn btn-ghost" onclick="cancelOrder()">Cancel order</button>
+</section>
 
   <section id="step6" class="hidden">
     <div class="step-label">Step 5 of 6 — Payment</div>
@@ -215,7 +221,9 @@
     <input type="text" id="cashCollectedByInput" placeholder="Cash collected by (e.g. Greg)" oninput="validatePaymentStep()">
     </div>
     <button class="btn btn-primary" id="toSlipBtn" onclick="onPaymentContinue()" disabled>Continue &rarr;</button>
-    </section>>
+    
+<button class="btn btn-ghost" onclick="cancelOrder()">Cancel order</button>
+</section>>
 
   <section id="step7" class="hidden">
     <div class="step-label">Step 6 of 6 — Payment Slip</div>
@@ -226,7 +234,9 @@
       <input type="file" id="slipFile" accept="image/*" onchange="handleSlip(event)">
     </div>
     <button class="btn btn-primary" id="submitOrderBtn" onclick="submitOrder()" disabled>Submit Order</button>
-  </section>
+  
+<button class="btn btn-ghost" onclick="cancelOrder()">Cancel order</button>
+</section>
 
   <section id="step8" class="hidden">
     <div class="success" id="successBox">
@@ -235,10 +245,34 @@
       <p class="sub" id="successSub">Order ID</p>
       <div class="oid" id="successOrderId"></div>
       <div class="packing-list" id="packingList" style="text-align:left;margin-top:18px;"></div>
-      <button class="btn btn-primary" onclick="resetOrder()">New Order</button>
+      <div style="display:flex;flex-direction:column;gap:8px;margin:14px 0"><button class="btn btn-secondary" onclick="slipFromLast()">&#128247; Add / upload payment slip</button><button class="btn btn-secondary" id="upgradeLastBtn" onclick="upgradeFromLast()">&#11014; Upgrade this order</button></div>
+<button class="btn btn-primary" onclick="resetOrder()">New Order</button>
     </div>
   </section>
 
+<section id="step10" class="hidden">
+<div class="step-label">Upgrade order</div>
+<h2 id="upgradeTitle">Upgrade</h2>
+<p class="sub" id="upgradeSub"></p>
+<div id="upgradeSets"></div>
+<div id="upgradeSlots"></div>
+<button class="btn btn-primary" id="upgradeContinueBtn" onclick="upgradeContinue()" disabled>Continue &rarr;</button>
+<button class="btn btn-ghost" onclick="cancelOrder()">Cancel</button>
+</section>
+<section id="step11" class="hidden">
+<div class="step-label">Payment slip</div>
+<h2>Add payment slip</h2>
+<p class="sub">Attach a payment slip to an order that is already saved.</p>
+<div class="cart-item"><div><strong id="slipTargetInfo"></strong></div></div>
+<div class="slip-box">
+<div id="lateSlipPreview"></div>
+<label class="slip-label" for="lateSlipFile">&#128247; Take Photo / Choose from Gallery</label>
+<input type="file" id="lateSlipFile" accept="image/*" onchange="lateSlipPicked(event)">
+</div>
+<p class="sub" id="lateSlipMsg"></p>
+<button class="btn btn-primary" id="lateSlipBtn" onclick="lateSlipUpload()" disabled>Upload slip</button>
+<button class="btn btn-ghost" id="lateSlipCancel" onclick="cancelOrder()">Cancel</button>
+</section>
 <section id="step9" class="hidden">
 <div class="step-label">Staff — Change flavours</div>
 <h2>Find an order</h2>
@@ -384,7 +418,7 @@ function updatePendingBadge(){
 
 /* ================= NAVIGATION ================= */
 function goToStep(n){
-  ['step1','step2','step3','step4','step5','step6','step7','step8','step9'].forEach((id,i)=>{
+  ['step1','step2','step3','step4','step5','step6','step7','step8','step9','step10','step11'].forEach((id,i)=>{
     document.getElementById(id).classList.toggle('hidden', (i+1)!==n);
   });
   if(n===3) renderCartSummary();
@@ -752,7 +786,7 @@ function amendBuild(rows){
       });
       return;
     }
-    if (src === 'internal-use') return;
+    if (src === 'slip-added') return; if (src === 'upgrade') { const um = /^UPGRADE of (\S+) /.exec(items); if (um && orders[um[1]]) { orders[um[1]].total = Number(orders[um[1]].total || 0) + Number(r[5] || 0); orders[um[1]].upgraded = true; } return; } if (src === 'internal-use') return;
     const o = { id: id, time: r[1], name: String(r[2] || ''), phone: String(r[3] || ''), total: r[5], raw: items, over: {} };
     orders[id] = o; list.push(o);
   });
@@ -780,7 +814,7 @@ function amendRender(q){
   msg.textContent = amendHits.length ? (amendHits.length + ' order(s) found today. Tap the one to change.') : 'No order found today for that phone number or ID.';
   document.getElementById('amendResults').innerHTML = amendHits.map(function(o, i){
     const t = new Date(o.time); const hhmm = isNaN(t) ? '' : t.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    return '<div class="set-card" onclick="amendPick(' + i + ')"><div class="name">' + esc(o.id) + ' · ' + esc(hhmm) + (o.name ? ' · ' + esc(o.name) : '') + '</div><div class="desc">' + amendItemsOf(o).map(function(it){ return esc(it.text); }).join('<br>') + '</div><div class="price" style="font-size:1.1rem">RM' + esc(o.total) + '</div></div>';
+    return '<div class="set-card" onclick="amendPick(' + i + ')"><div class="name">' + esc(o.id) + ' · ' + esc(hhmm) + (o.name ? ' · ' + esc(o.name) : '') + '</div><div class="desc">' + amendItemsOf(o).map(function(it){ return esc(it.text); }).join('<br>') + '</div><div class="price" style="font-size:1.1rem">RM' + esc(o.total) + '</div><div style="display:flex;gap:8px;margin-top:10px"><button type="button" class="btn btn-secondary" onclick="event.stopPropagation();upgradeFromStaff(' + i + ')">&#11014; Upgrade</button><button type="button" class="btn btn-secondary" onclick="event.stopPropagation();slipFromStaff(' + i + ')">&#128247; Add slip</button></div></div>';
   }).join('');
 }
 function amendPick(i){
@@ -842,6 +876,132 @@ function amendSave(){
     document.getElementById('amendEdit').innerHTML = '<div class="step-label">Saved</div><h2>' + (queued ? 'Saved on this tablet' : 'Flavours updated') + '</h2><p class="sub">' + esc(amendOrder.id) + '<br>' + esc(summary) + '</p>' + (queued ? '<p class="sub">No connection. It will send when you tap Retry at the top.</p>' : '') + '<button class="btn btn-primary" onclick="goToStep(1)">Done</button>';
   };
   callLogOrder(payload).then(function(){ done(false); }).catch(function(){ const p = loadPending(); p.push(payload); savePending(p); updatePendingBadge(); done(true); });
+}
+
+/* ================= CANCEL / LATE SLIP / UPGRADE ================= */
+let lastOrder = null, upgradeCtx = null, upgradeTarget = null, upgradeChoice = null, slipTarget = null, slipData = null;
+
+function cancelOrder(){
+  if (cart.length && !confirm('Discard this order and go back to the front page?')) return;
+  resetOrder();
+}
+
+(function(){
+  const baseReset = resetOrder;
+  resetOrder = function(){ upgradeCtx = null; upgradeTarget = null; upgradeChoice = null; slipTarget = null; slipData = null; baseReset(); };
+  const baseBuild = buildOrderPayload;
+  buildOrderPayload = function(id){ const p = baseBuild(id); if (upgradeCtx) p.source = 'upgrade'; return p; };
+  const baseSuccess = showSuccess;
+  showSuccess = function(orderId, synced){
+    lastOrder = { id: orderId, name: document.getElementById('nameInput').value.trim(), phone: document.getElementById('whatsappInput').value.trim(), paid: cartTotalValue(), upgrade: !!upgradeCtx, items: cart.map(function(i){ return { name: i.name, flavors: (i.setKey === 'D' ? compressFlavors(i.slots) : i.slots.map(function(s){ return s.flavor; })) }; }) };
+    document.getElementById('upgradeLastBtn').style.display = lastOrder.upgrade ? 'none' : '';
+    baseSuccess(orderId, synced);
+  };
+})();
+
+function compOf(items){
+  const c = { boxes: [], ecobags: [], parts: [], ok: true };
+  items.forEach(function(it){
+    const key = Object.keys(SETS).filter(function(k){ return SETS[k].name === it.name; })[0];
+    const set = key ? SETS[key] : null;
+    if (!set || set.bulk) { c.ok = false; return; }
+    if (set.boxSlots + set.ecobagSlots === 0) return;
+    const fl = Array.isArray(it.flavors) ? it.flavors : String(it.flavors || '').split(', ');
+    for (let i = 0; i < set.boxSlots; i++) c.boxes.push(fl[i] || '?');
+    for (let i = 0; i < set.ecobagSlots; i++) c.ecobags.push(fl[set.boxSlots + i] || '?');
+    c.parts.push(set.name + ' - ' + fl.join(', '));
+  });
+  if (!c.boxes.length && !c.ecobags.length) c.ok = false;
+  return c;
+}
+
+function startUpgrade(t){
+  resetOrder();
+  upgradeTarget = t;
+  const c = t.blocked ? { ok: false, boxes: [], ecobags: [], parts: [] } : compOf(t.items), paid = Number(t.paid) || 0;
+  const keys = c.ok ? ['A','B','C'].filter(function(k){ const s = SETS[k]; return s && !s.bulk && s.price > paid && s.boxSlots >= c.boxes.length && s.ecobagSlots >= c.ecobags.length && (s.boxSlots - c.boxes.length + s.ecobagSlots - c.ecobags.length) > 0; }) : [];
+  document.getElementById('upgradeTitle').textContent = t.id + (t.name ? ' · ' + t.name : '');
+  document.getElementById('upgradeSub').innerHTML = c.ok ? ('Paid so far: <strong>RM' + paid + '</strong><br>Customer already has: ' + esc(c.parts.join(' + '))) : (t.blocked ? 'This order was already upgraded. Please make a new order for anything further.' : 'This order cannot be upgraded here (it has an item that is not a standard set or single).');
+  document.getElementById('upgradeSets').innerHTML = keys.length ? keys.map(function(k){
+    const s = SETS[k], nb = s.boxSlots - c.boxes.length, ne = s.ecobagSlots - c.ecobags.length;
+    const give = (nb ? nb + ' box' + (nb > 1 ? 'es' : '') : '') + (nb && ne ? ' + ' : '') + (ne ? ne + ' ecobag' + (ne > 1 ? 's' : '') : '') + (s.free.length ? ' + FREE ' + s.free.join(', ') : '');
+    return '<div class="set-card" id="upgCard_' + k + '" style="margin-bottom:10px" onclick="upgradePick(\'' + k + '\')"><div class="name">' + esc(s.name) + '</div><div class="price">Top-up RM' + (s.price - paid) + '</div><div class="desc">Set price RM' + s.price + ' minus RM' + paid + ' already paid. Hand over: ' + esc(give) + '</div></div>';
+  }).join('') : (c.ok ? '<p class="sub">No bigger set fits this order.</p>' : '');
+  document.getElementById('upgradeSlots').innerHTML = '';
+  document.getElementById('upgradeContinueBtn').disabled = true;
+  upgradeChoice = null;
+  goToStep(10);
+}
+
+function upgradePick(k){
+  const c = compOf(upgradeTarget.items), s = SETS[k], nb = s.boxSlots - c.boxes.length, ne = s.ecobagSlots - c.ecobags.length;
+  upgradeChoice = { key: k, nb: nb, ne: ne };
+  Object.keys(SETS).forEach(function(x){ const el = document.getElementById('upgCard_' + x); if (el) el.style.borderColor = (x === k) ? 'var(--maroon)' : ''; });
+  let h = '';
+  for (let i = 0; i < nb; i++) h += '<div class="flavor-slot"><div class="slot-title">New box ' + (i + 1) + ' flavour</div><select data-t="box" style="' + SEL_STYLE + '" onchange="upgradeSel()"><option value="">Choose flavour...</option>' + BOX_FLAVORS.map(function(f){ return '<option>' + esc(f) + '</option>'; }).join('') + '</select></div>';
+  for (let i = 0; i < ne; i++) h += '<div class="flavor-slot"><div class="slot-title">New ecobag ' + (i + 1) + ' flavour</div><select data-t="ecobag" style="' + SEL_STYLE + '" onchange="upgradeSel()"><option value="">Choose flavour...</option>' + ECOBAG_FLAVORS.map(function(f){ return '<option>' + esc(f) + '</option>'; }).join('') + '</select></div>';
+  document.getElementById('upgradeSlots').innerHTML = h;
+  upgradeSel();
+}
+
+function upgradeSel(){
+  const sels = document.querySelectorAll('#upgradeSlots select');
+  document.getElementById('upgradeContinueBtn').disabled = !upgradeChoice || !sels.length || Array.prototype.some.call(sels, function(x){ return !x.value; });
+}
+
+function upgradeContinue(){
+  if (!upgradeChoice || !upgradeTarget) return;
+  const s = SETS[upgradeChoice.key], c = compOf(upgradeTarget.items), paid = Number(upgradeTarget.paid) || 0, topup = s.price - paid;
+  const pick = function(t){ return Array.prototype.map.call(document.querySelectorAll('#upgradeSlots select[data-t="' + t + '"]'), function(x){ return x.value; }); };
+  const slots = pick('box').map(function(f){ return { type: 'box', flavor: f }; }).concat(pick('ecobag').map(function(f){ return { type: 'ecobag', flavor: f }; }));
+  cart = [{ setKey: upgradeChoice.key, name: 'UPGRADE of ' + upgradeTarget.id + ' to ' + s.name + ' (paid RM' + paid + ', top-up RM' + topup + ', customer keeps ' + c.parts.join(' + ') + ')', price: topup, slots: slots, free: s.free.slice() }];
+  upgradeCtx = { from: upgradeTarget.id, paid: paid };
+  document.getElementById('nameInput').value = upgradeTarget.name || '';
+  const w = document.getElementById('whatsappInput'); w.value = upgradeTarget.phone || ''; w.dispatchEvent(new Event('input', { bubbles: true }));
+  renderCartPreview();
+  goToStep(3);
+}
+
+function upgradeFromLast(){ if (!lastOrder || lastOrder.upgrade) return; startUpgrade({ id: lastOrder.id, name: lastOrder.name, phone: lastOrder.phone, paid: lastOrder.paid, items: lastOrder.items }); }
+function upgradeFromStaff(i){ const o = amendHits[i]; if (!o) return; startUpgrade({ id: o.id, name: o.name, phone: o.phone, paid: o.total, blocked: !!o.upgraded, items: amendItemsOf(o).map(function(it){ return { name: it.name, flavors: it.cur }; }) }); }
+
+function startSlip(t){
+  resetOrder();
+  slipTarget = t; slipData = null;
+  document.getElementById('slipTargetInfo').textContent = t.id + (t.name ? ' · ' + t.name : '');
+  document.getElementById('lateSlipPreview').innerHTML = '';
+  document.getElementById('lateSlipFile').value = '';
+  document.getElementById('lateSlipMsg').textContent = '';
+  document.getElementById('lateSlipBtn').disabled = true;
+  document.getElementById('lateSlipBtn').textContent = 'Upload slip';
+  document.getElementById('lateSlipCancel').textContent = 'Cancel';
+  goToStep(11);
+}
+function slipFromLast(){ if (lastOrder) startSlip({ id: lastOrder.id, name: lastOrder.name, phone: lastOrder.phone }); }
+function slipFromStaff(i){ const o = amendHits[i]; if (o) startSlip({ id: o.id, name: o.name, phone: o.phone }); }
+
+function lateSlipPicked(e){
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    slipData = { data: ev.target.result, mime: file.type || 'image/jpeg' };
+    document.getElementById('lateSlipPreview').innerHTML = '<img src="' + ev.target.result + '">';
+    document.getElementById('lateSlipBtn').disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+function lateSlipUpload(){
+  if (!slipTarget || !slipData) return;
+  const t = slipTarget, btn = document.getElementById('lateSlipBtn');
+  btn.disabled = true; btn.textContent = 'Uploading...';
+  const payload = { id: 'GH-SLIP-' + Date.now().toString(36).toUpperCase(), timestamp: new Date().toISOString(), name: t.name || '', whatsapp: t.phone || '', items: [{ name: 'PAYMENT SLIP for ' + t.id, flavors: ['slip attached'], free: [] }], total: 0, slipBase64: slipData.data, source: 'slip-added' };
+  const done = function(ok){
+    document.getElementById('lateSlipMsg').textContent = ok ? ('Slip saved to order ' + t.id + '.') : 'Saved offline. It will sync when the internet is back.';
+    btn.textContent = 'Slip uploaded';
+    document.getElementById('lateSlipCancel').textContent = 'Done';
+  };
+  callLogOrder(payload).then(function(){ done(true); }).catch(function(){ queueOffline(payload); updatePendingBadge(); done(false); });
 }
 
 /* ================= INIT ================= */
