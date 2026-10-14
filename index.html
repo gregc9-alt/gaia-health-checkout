@@ -82,6 +82,7 @@
 <header>
   <div class="brand">🌿 Gaia Health Checkout</div>
   <button class="link" onclick="openAmend()">✎ Change flavours</button>
+  <button class="link" onclick="openCash()">&#128181; Cash</button>
   <button class="link hidden" id="pendingSyncBtn" onclick="retrySync()">⚠ <span id="pendingCount">0</span> pending — Retry</button>
 </header>
 
@@ -218,7 +219,7 @@
     </div>
     <div id="cashPayBlock" class="hidden" style="margin-top:16px;">
     <p class="sub">Cash collected on the spot. Enter who is holding the cash.</p>
-    <input type="text" id="cashCollectedByInput" placeholder="Cash collected by (e.g. Greg)" oninput="validatePaymentStep()">
+    <input type="text" id="cashCollectedByInput" list="cashNames" autocomplete="off" placeholder="Cash collected by (e.g. Greg)" oninput="validatePaymentStep()">
     </div>
     <button class="btn btn-primary" id="toSlipBtn" onclick="onPaymentContinue()" disabled>Continue &rarr;</button>
     
@@ -273,6 +274,14 @@
 <p class="sub" id="lateSlipMsg"></p>
 <button class="btn btn-primary" id="lateSlipBtn" onclick="lateSlipUpload()" disabled>Upload slip</button>
 <button class="btn btn-ghost" id="lateSlipCancel" onclick="cancelOrder()">Cancel</button>
+</section>
+<section id="step12" class="hidden">
+<div class="step-label">Cash check</div>
+<h2>Cash on hand</h2>
+<p class="sub">Cash orders from this phone are recorded here automatically. Log handovers and spending so each person's total stays right, then count and compare.</p>
+<datalist id="cashNames"></datalist>
+<div id="cashBody"></div>
+<button class="btn btn-ghost" onclick="cashBack()">Back</button>
 </section>
 <section id="step9" class="hidden">
 <div class="step-label">Staff — Change flavours</div>
@@ -419,7 +428,7 @@ function updatePendingBadge(){
 
 /* ================= NAVIGATION ================= */
 function goToStep(n){
-  ['step1','step2','step3','step4','step5','step6','step7','step8','step9','step10','step11'].forEach((id,i)=>{
+  ['step1','step2','step3','step4','step5','step6','step7','step8','step9','step10','step11','step12'].forEach((id,i)=>{
     document.getElementById(id).classList.toggle('hidden', (i+1)!==n);
   });
   if(n===3) renderCartSummary();
@@ -1020,6 +1029,120 @@ function lateSlipUpload(){
   };
   callLogOrder(payload).then(function(){ done(true); }).catch(function(){ queueOffline(payload); updatePendingBadge(); done(false); });
 }
+
+/* ================= CASH CHECK (this phone) ================= */
+const CASH_KEY = 'gaia_cash_ledger_v1';
+let cashPrev = 1, cashList = [];
+function cashDay(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function cashLoad(){ try { const j = JSON.parse(localStorage.getItem(CASH_KEY) || '{}'); return { e: Array.isArray(j.e) ? j.e : [], c: j.c || {} }; } catch (err) { return { e: [], c: {} }; } }
+function cashSave(j){ try { localStorage.setItem(CASH_KEY, JSON.stringify(j)); } catch (err) {} }
+function cashName(s){ s = String(s || '').trim().replace(/\s+/g, ' '); return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : 'Unnamed'; }
+function cashFillNames(){
+  const names = {}; cashLoad().e.forEach(function(e){ if (e.by) names[e.by] = 1; if (e.to) names[e.to] = 1; });
+  const dl = document.getElementById('cashNames'); if (dl) dl.innerHTML = Object.keys(names).map(function(n){ return '<option value="' + esc(n) + '"></option>'; }).join('');
+}
+function cashAdd(e){ const j = cashLoad(); e.d = cashDay(); e.t = new Date().toISOString(); j.e.push(e); cashSave(j); cashFillNames(); }
+
+(function(){
+  const base = showSuccess;
+  showSuccess = function(orderId, synced){
+    try { if (paymentMethod === 'cash') cashAdd({ k: 'sale', id: orderId, by: cashName(document.getElementById('cashCollectedByInput').value), amt: cartTotalValue(), note: upgradeCtx ? 'upgrade' : '' }); } catch (err) {}
+    base(orderId, synced);
+  };
+})();
+
+function cashCalc(){
+  const j = cashLoad(), day = cashDay(), h = {};
+  const get = function(n){ return h[n] || (h[n] = { name: n, sales: 0, rin: 0, rout: 0, spent: 0 }); };
+  j.e.forEach(function(e, i){ e.i = i; });
+  const todays = j.e.filter(function(e){ return e.d === day; });
+  todays.forEach(function(e){
+    const a = Number(e.amt) || 0;
+    if (e.k === 'sale') get(e.by).sales += a;
+    else if (e.k === 'move') { get(e.by).rout += a; get(e.to).rin += a; }
+    else if (e.k === 'out') get(e.by).spent += a;
+  });
+  const list = Object.keys(h).map(function(n){ const x = h[n]; x.bal = x.sales + x.rin - x.rout - x.spent; return x; }).sort(function(a, b){ return b.bal - a.bal; });
+  return { j: j, day: day, todays: todays, list: list, counts: j.c[day] || {} };
+}
+
+function openCash(){
+  const vis = [].slice.call(document.querySelectorAll('section')).filter(function(x){ return !x.classList.contains('hidden'); })[0];
+  const n = vis ? Number(String(vis.id).replace('step', '')) : 1;
+  if (n !== 12) cashPrev = n;
+  cashRender();
+  goToStep(12);
+}
+function cashBack(){ goToStep(cashPrev || 1); }
+
+function cashFormSync(){
+  const t = document.getElementById('cashType').value;
+  document.getElementById('cashTo').style.display = (t === 'move') ? '' : 'none';
+  document.getElementById('cashWho').placeholder = t === 'move' ? 'Who is handing over' : (t === 'out' ? 'Who paid it out' : 'Who collected the cash');
+}
+
+function cashRender(){
+  const s = cashCalc(); cashList = s.list; cashFillNames();
+  const total = s.list.reduce(function(a, x){ return a + x.bal; }, 0);
+  let h = '<div class="cart-item" style="margin-bottom:10px"><div><strong>Cash that should exist today</strong><div class="meta">' + esc(s.day) + ' · cash orders from this phone</div></div><div class="rm">RM' + total.toFixed(0) + '</div></div>';
+  if (!s.list.length) h += '<p class="sub">No cash recorded on this phone yet today. Cash orders appear here automatically.</p>';
+  s.list.forEach(function(x, i){
+    const cv = s.counts[x.name];
+    h += '<div class="set-card" style="margin-bottom:10px;cursor:default"><div class="name">' + esc(x.name) + '</div><div class="price">Should hold RM' + x.bal.toFixed(0) + '</div><div class="desc">Sales RM' + x.sales + ' · Received RM' + x.rin + ' · Handed over RM' + x.rout + ' · Spent RM' + x.spent + '</div>'
+      + '<input type="number" inputmode="decimal" placeholder="Counted RM (what you really hold)" value="' + (cv === undefined ? '' : esc(cv)) + '" style="' + SEL_STYLE + 'margin-top:10px" oninput="cashCount(' + i + ', this.value)">'
+      + '<div id="cashDiff_' + i + '" style="font-weight:700"></div></div>';
+  });
+  h += '<h3 style="margin:18px 0 8px">Record cash movement</h3>'
+    + '<select id="cashType" style="' + SEL_STYLE + '" onchange="cashFormSync()"><option value="move">Hand over cash to someone</option><option value="out">Spent / paid out (parking, food, float...)</option><option value="sale">Add a cash sale not in the checkout</option></select>'
+    + '<input id="cashWho" list="cashNames" autocomplete="off" type="text" placeholder="Who is handing over" style="' + SEL_STYLE + '">'
+    + '<input id="cashTo" list="cashNames" autocomplete="off" type="text" placeholder="Handed over to" style="' + SEL_STYLE + '">'
+    + '<input id="cashAmt" type="number" inputmode="decimal" placeholder="Amount RM" style="' + SEL_STYLE + '">'
+    + '<input id="cashNote" type="text" placeholder="Note (optional)" style="' + SEL_STYLE + '">'
+    + '<button class="btn btn-primary" onclick="cashSubmit()">Add</button><p class="sub" id="cashMsg"></p>';
+  h += '<h3 style="margin:18px 0 8px">Today\'s log</h3>' + (s.todays.length ? s.todays.slice().reverse().map(function(e){
+    const tm = new Date(e.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const line = e.k === 'sale' ? ((e.id === 'manual' ? 'Cash sale (manual)' : 'Cash sale ' + e.id) + ' → ' + e.by + ' +RM' + e.amt) : (e.k === 'move' ? e.by + ' handed RM' + e.amt + ' to ' + e.to : e.by + ' spent RM' + e.amt);
+    return '<div class="cart-item"><div><strong>' + esc(line) + '</strong><div class="meta">' + esc(tm) + (e.note ? ' · ' + esc(e.note) : '') + '</div></div><button class="rm-remove" onclick="cashDel(' + e.i + ')">Remove</button></div>';
+  }).join('') : '<p class="sub">Nothing yet.</p>');
+  h += '<button class="btn btn-secondary" style="margin-top:12px" onclick="cashSummary()">Copy summary for the team</button><pre id="cashPre" style="white-space:pre-wrap;font-size:.85rem"></pre>';
+  document.getElementById('cashBody').innerHTML = h;
+  s.list.forEach(function(x, i){ cashCount(i, s.counts[x.name], true); });
+  cashFormSync();
+}
+
+function cashCount(i, val, noSave){
+  const x = cashList[i]; if (!x) return;
+  const el = document.getElementById('cashDiff_' + i); if (!el) return;
+  if (val === undefined || val === null || val === '') { el.textContent = ''; if (!noSave) cashSetCount(x.name, ''); return; }
+  const diff = Number(val) - x.bal;
+  el.style.color = diff === 0 ? 'var(--green)' : 'var(--danger)';
+  el.textContent = diff === 0 ? '✓ Matches' : (diff < 0 ? 'Short by RM' + Math.abs(diff).toFixed(0) : 'Over by RM' + diff.toFixed(0));
+  if (!noSave) cashSetCount(x.name, val);
+}
+function cashSetCount(name, val){ const j = cashLoad(), d = cashDay(); j.c[d] = j.c[d] || {}; if (val === '') delete j.c[d][name]; else j.c[d][name] = val; cashSave(j); }
+
+function cashSubmit(){
+  const g = function(id){ return document.getElementById(id).value; };
+  const type = g('cashType'), who = cashName(g('cashWho')), to = cashName(g('cashTo')), amt = Number(g('cashAmt')), note = g('cashNote').trim(), msg = document.getElementById('cashMsg');
+  if (!g('cashWho').trim() || !(amt > 0)) { msg.textContent = 'Enter who, and a RM amount above 0.'; return; }
+  if (type === 'move' && (!g('cashTo').trim() || to === who)) { msg.textContent = 'Enter a different person to hand it to.'; return; }
+  cashAdd(type === 'move' ? { k: 'move', by: who, to: to, amt: amt, note: note } : (type === 'out' ? { k: 'out', by: who, amt: amt, note: note } : { k: 'sale', id: 'manual', by: who, amt: amt, note: note }));
+  cashRender();
+}
+function cashDel(i){
+  if (!confirm('Remove this entry?')) return;
+  const j = cashLoad(); j.e.splice(i, 1); cashSave(j); cashRender();
+}
+function cashSummary(){
+  const s = cashCalc(), lines = ['Cash check ' + s.day, ''];
+  let tot = 0;
+  s.list.forEach(function(x){ tot += x.bal; lines.push(x.name + ': should hold RM' + x.bal.toFixed(0) + (s.counts[x.name] !== undefined ? ' (counted RM' + s.counts[x.name] + ')' : '')); });
+  lines.push('Total: RM' + tot.toFixed(0));
+  const txt = lines.join('\n');
+  document.getElementById('cashPre').textContent = txt;
+  try { navigator.clipboard.writeText(txt); } catch (err) {}
+}
+cashFillNames();
 
 /* ================= INIT ================= */
 renderCartPreview();
