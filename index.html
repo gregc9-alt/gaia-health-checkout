@@ -256,6 +256,7 @@
 <p class="sub" id="upgradeSub"></p>
 <div id="upgradeSets"></div>
 <div id="upgradeSlots"></div>
+<label id="upgradeTrialWrap" style="display:none;margin:10px 0"><input type="checkbox" id="upgradeTrialCheck" checked> Customer returns the Trial Pack</label>
 <button class="btn btn-primary" id="upgradeContinueBtn" onclick="upgradeContinue()" disabled>Continue &rarr;</button>
 <button class="btn btn-ghost" onclick="cancelOrder()">Cancel</button>
 </section>
@@ -900,33 +901,45 @@ function cancelOrder(){
 })();
 
 function compOf(items){
-  const c = { boxes: [], ecobags: [], parts: [], ok: true };
+  const c = { boxes: [], ecobags: [], parts: [], trial: 0, ok: true };
   items.forEach(function(it){
     const key = Object.keys(SETS).filter(function(k){ return SETS[k].name === it.name; })[0];
     const set = key ? SETS[key] : null;
     if (!set || set.bulk) { c.ok = false; return; }
-    if (set.boxSlots + set.ecobagSlots === 0) return;
+    if (set.boxSlots + set.ecobagSlots === 0) { c.trial += 1; return; }
     const fl = Array.isArray(it.flavors) ? it.flavors : String(it.flavors || '').split(', ');
     for (let i = 0; i < set.boxSlots; i++) c.boxes.push(fl[i] || '?');
     for (let i = 0; i < set.ecobagSlots; i++) c.ecobags.push(fl[set.boxSlots + i] || '?');
     c.parts.push(set.name + ' - ' + fl.join(', '));
   });
-  if (!c.boxes.length && !c.ecobags.length) c.ok = false;
+  if (!c.boxes.length && !c.ecobags.length && !c.trial) c.ok = false;
   return c;
+}
+
+function upgOpt(k, c, paid){
+  const s = SETS[k];
+  if (!s || s.bulk || !(s.price > paid) || s.boxSlots + s.ecobagSlots === 0) return null;
+  const nb0 = c.boxes.length, ne0 = c.ecobags.length;
+  if (s.boxSlots >= nb0 && s.ecobagSlots >= ne0 && (s.boxSlots + s.ecobagSlots - nb0 - ne0) > 0) return { mode: 'keep', nb: s.boxSlots - nb0, ne: s.ecobagSlots - ne0 };
+  if (nb0 + ne0 > 0) return { mode: 'swap', nb: s.boxSlots, ne: s.ecobagSlots };
+  return null;
 }
 
 function startUpgrade(t){
   resetOrder();
   upgradeTarget = t;
-  const c = t.blocked ? { ok: false, boxes: [], ecobags: [], parts: [] } : compOf(t.items), paid = Number(t.paid) || 0;
-  const keys = c.ok ? ['A','B','C'].filter(function(k){ const s = SETS[k]; return s && !s.bulk && s.price > paid && s.boxSlots >= c.boxes.length && s.ecobagSlots >= c.ecobags.length && (s.boxSlots - c.boxes.length + s.ecobagSlots - c.ecobags.length) > 0; }) : [];
+  const c = t.blocked ? { ok: false, boxes: [], ecobags: [], parts: [], trial: 0 } : compOf(t.items), paid = Number(t.paid) || 0;
+  const keys = c.ok ? ['A','B','C','SINGLE_BOX','ECOBAG_SINGLE'].filter(function(k){ return !!upgOpt(k, c, paid); }) : [];
   document.getElementById('upgradeTitle').textContent = t.id + (t.name ? ' · ' + t.name : '');
-  document.getElementById('upgradeSub').innerHTML = c.ok ? ('Paid so far: <strong>RM' + paid + '</strong><br>Customer already has: ' + esc(c.parts.join(' + '))) : (t.blocked ? 'This order was already upgraded. Please make a new order for anything further.' : 'This order cannot be upgraded here (it has an item that is not a standard set or single).');
+  const has = c.parts.concat(c.trial ? [c.trial + ' x Trial Pack'] : []).join(' + ');
+  document.getElementById('upgradeSub').innerHTML = c.ok ? ('Paid so far: <strong>RM' + paid + '</strong><br>Customer already has: ' + esc(has)) : (t.blocked ? 'This order was already upgraded. Please make a new order for anything further.' : 'This order cannot be upgraded here (it has an item that is not a standard set or single).');
   document.getElementById('upgradeSets').innerHTML = keys.length ? keys.map(function(k){
-    const s = SETS[k], nb = s.boxSlots - c.boxes.length, ne = s.ecobagSlots - c.ecobags.length;
-    const give = (nb ? nb + ' box' + (nb > 1 ? 'es' : '') : '') + (nb && ne ? ' + ' : '') + (ne ? ne + ' ecobag' + (ne > 1 ? 's' : '') : '') + (s.free.length ? ' + FREE ' + s.free.join(', ') : '');
-    return '<div class="set-card" id="upgCard_' + k + '" style="margin-bottom:10px" onclick="upgradePick(\'' + k + '\')"><div class="name">' + esc(s.name) + '</div><div class="price">Top-up RM' + (s.price - paid) + '</div><div class="desc">Set price RM' + s.price + ' minus RM' + paid + ' already paid. Hand over: ' + esc(give) + '</div></div>';
-  }).join('') : (c.ok ? '<p class="sub">No bigger set fits this order.</p>' : '');
+    const s = SETS[k], o = upgOpt(k, c, paid);
+    const give = (o.nb ? o.nb + ' box' + (o.nb > 1 ? 'es' : '') : '') + (o.nb && o.ne ? ' + ' : '') + (o.ne ? o.ne + ' ecobag' + (o.ne > 1 ? 's' : '') : '') + (s.free.length ? ' + FREE ' + s.free.join(', ') : '');
+    return '<div class="set-card" id="upgCard_' + k + '" style="margin-bottom:10px" onclick="upgradePick(\'' + k + '\')"><div class="name">' + esc(s.name) + '</div><div class="price">Top-up RM' + (s.price - paid) + '</div><div class="desc">' + (o.mode === 'swap' ? 'Swap: customer returns ' + esc(c.parts.join(' + ')) + '. ' : '') + 'Price RM' + s.price + ' minus RM' + paid + ' already paid. Hand over: ' + esc(give) + '</div></div>';
+  }).join('') : (c.ok ? '<p class="sub">No higher-priced item to move up to.</p>' : '');
+  document.getElementById('upgradeTrialWrap').style.display = c.trial ? '' : 'none';
+  document.getElementById('upgradeTrialCheck').checked = true;
   document.getElementById('upgradeSlots').innerHTML = '';
   document.getElementById('upgradeContinueBtn').disabled = true;
   upgradeChoice = null;
@@ -934,12 +947,13 @@ function startUpgrade(t){
 }
 
 function upgradePick(k){
-  const c = compOf(upgradeTarget.items), s = SETS[k], nb = s.boxSlots - c.boxes.length, ne = s.ecobagSlots - c.ecobags.length;
-  upgradeChoice = { key: k, nb: nb, ne: ne };
+  const c = compOf(upgradeTarget.items), paid = Number(upgradeTarget.paid) || 0, o = upgOpt(k, c, paid);
+  if (!o) return;
+  upgradeChoice = { key: k, mode: o.mode, nb: o.nb, ne: o.ne };
   Object.keys(SETS).forEach(function(x){ const el = document.getElementById('upgCard_' + x); if (el) el.style.borderColor = (x === k) ? 'var(--maroon)' : ''; });
   let h = '';
-  for (let i = 0; i < nb; i++) h += '<div class="flavor-slot"><div class="slot-title">New box ' + (i + 1) + ' flavour</div><select data-t="box" style="' + SEL_STYLE + '" onchange="upgradeSel()"><option value="">Choose flavour...</option>' + BOX_FLAVORS.map(function(f){ return '<option>' + esc(f) + '</option>'; }).join('') + '</select></div>';
-  for (let i = 0; i < ne; i++) h += '<div class="flavor-slot"><div class="slot-title">New ecobag ' + (i + 1) + ' flavour</div><select data-t="ecobag" style="' + SEL_STYLE + '" onchange="upgradeSel()"><option value="">Choose flavour...</option>' + ECOBAG_FLAVORS.map(function(f){ return '<option>' + esc(f) + '</option>'; }).join('') + '</select></div>';
+  for (let i = 0; i < o.nb; i++) h += '<div class="flavor-slot"><div class="slot-title">New box ' + (i + 1) + ' flavour</div><select data-t="box" style="' + SEL_STYLE + '" onchange="upgradeSel()"><option value="">Choose flavour...</option>' + BOX_FLAVORS.map(function(f){ return '<option>' + esc(f) + '</option>'; }).join('') + '</select></div>';
+  for (let i = 0; i < o.ne; i++) h += '<div class="flavor-slot"><div class="slot-title">New ecobag ' + (i + 1) + ' flavour</div><select data-t="ecobag" style="' + SEL_STYLE + '" onchange="upgradeSel()"><option value="">Choose flavour...</option>' + ECOBAG_FLAVORS.map(function(f){ return '<option>' + esc(f) + '</option>'; }).join('') + '</select></div>';
   document.getElementById('upgradeSlots').innerHTML = h;
   upgradeSel();
 }
@@ -954,7 +968,10 @@ function upgradeContinue(){
   const s = SETS[upgradeChoice.key], c = compOf(upgradeTarget.items), paid = Number(upgradeTarget.paid) || 0, topup = s.price - paid;
   const pick = function(t){ return Array.prototype.map.call(document.querySelectorAll('#upgradeSlots select[data-t="' + t + '"]'), function(x){ return x.value; }); };
   const slots = pick('box').map(function(f){ return { type: 'box', flavor: f }; }).concat(pick('ecobag').map(function(f){ return { type: 'ecobag', flavor: f }; }));
-  cart = [{ setKey: upgradeChoice.key, name: 'UPGRADE of ' + upgradeTarget.id + ' to ' + s.name + ' (paid RM' + paid + ', top-up RM' + topup + ', customer keeps ' + c.parts.join(' + ') + ')', price: topup, slots: slots, free: s.free.slice() }];
+  const notes = [];
+  if (c.parts.length) notes.push((upgradeChoice.mode === 'swap' ? 'customer returns ' : 'customer keeps ') + c.parts.join(' + '));
+  if (c.trial && document.getElementById('upgradeTrialCheck').checked) notes.push('returns Trial Pack');
+  cart = [{ setKey: upgradeChoice.key, name: 'UPGRADE of ' + upgradeTarget.id + ' to ' + s.name + ' (paid RM' + paid + ', top-up RM' + topup + (notes.length ? ', ' + notes.join(', ') : '') + ')', price: topup, slots: slots, free: s.free.slice() }];
   upgradeCtx = { from: upgradeTarget.id, paid: paid };
   document.getElementById('nameInput').value = upgradeTarget.name || '';
   const w = document.getElementById('whatsappInput'); w.value = upgradeTarget.phone || ''; w.dispatchEvent(new Event('input', { bubbles: true }));
