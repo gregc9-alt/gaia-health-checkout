@@ -334,6 +334,7 @@ const SETS = {
 const BOX_FLAVORS = ['Avocado','Original','Chocolate','Oats','Purple Sweet Potato'];
 const ECOBAG_FLAVORS = ['Purple Sweet Potato','Avocado','Chocolate','Original','Oats'];
 
+let submitLock = false, lastSig = '', lastSigAt = 0;
 let cart = [];
 let pendingSet = null;
 let pendingSlots = [];
@@ -427,7 +428,7 @@ function updatePendingBadge(){
 }
 
 /* ================= NAVIGATION ================= */
-function goToStep(n){
+function goToStep(n){ if (n !== 8) submitLock = false;
   ['step1','step2','step3','step4','step5','step6','step7','step8','step9','step10','step11','step12'].forEach((id,i)=>{
     document.getElementById(id).classList.toggle('hidden', (i+1)!==n);
   });
@@ -642,6 +643,11 @@ function buildOrderPayload(orderId){
 }
 
 function submitOrder(){
+  if (submitLock) return;
+  const sig = JSON.stringify(cart) + '|' + paymentMethod + '|' + (document.getElementById('whatsappInput') ? document.getElementById('whatsappInput').value : '');
+  if (sig === lastSig && Date.now() - lastSigAt < 10000) { alert('This is identical to the order just sent, so it was NOT sent again. If it is a real second sale, wait a few seconds and tap again.'); return; }
+  submitLock = true; lastSig = sig; lastSigAt = Date.now();
+  const tsb = document.getElementById('toSlipBtn'); if (tsb) tsb.disabled = true;
   const orderId = 'GH-' + Date.now().toString(36).toUpperCase();
   const payload = buildOrderPayload(orderId);
   document.getElementById('submitOrderBtn').disabled = true;
